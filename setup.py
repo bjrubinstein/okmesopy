@@ -3,7 +3,7 @@ from setuptools import setup
 setup(name='okmesopy',
       version='0.5.0',
       description='Tools to download and manipulate data from OK Mesonet',
-      url='https://github.com/bjrubinstein/MesonetExtractor',
+      url='https://github.com/bjrubinstein/okmesopy',
       author='Ben Rubinstein',
       author_email='brubinst@hawk.iit.edu',
       license='GNU',
