@@ -93,7 +93,7 @@ class MesonetExtractor:
                 attempt = 0
                 while attempt < self.TTL:
                     try:
-                        urllib.request.urlretrieve(meta_url,self.destination)
+                        urllib.request.urlretrieve(meta_url,'{}/geoinfo.csv'.format(self.destination))
                         self.metadata = pd.read_csv('{}/{}'.format(self.destination,meta_file))
                         break
                     except Exception as e:
@@ -108,7 +108,7 @@ class MesonetExtractor:
                                     ' or downloaded from Mesonet. Try setting'
                                     ' the verbose argument to True for more'
                                     ' details.')
-
+        
 
     def download_station_data(self,site_id,start_date,end_date):
         '''
@@ -317,9 +317,9 @@ class MesonetExtractor:
             master_df is the dataframe with missing dates to correct
         ''' 
         # TODO: get this working and optimize it
-        missing_ddates = list(master_df[master_df.isna().any(axis=1)]['date'].unique())
-        cols = list(master_df.columns)
-        unwanted = ['STID', 'STNM', 'TIME', 'date', 'date_time']
+        #missing_ddates = list(master_df[master_df.isna().any(axis=1)]['date'].unique())
+        #cols = list(master_df.columns)
+        #unwanted = ['STID', 'STNM', 'TIME', 'date', 'date_time']
         #clim_pars =[i for i in cols if i not in unwanted]
         #mis_dates = [pd.to_datetime(start_date).strftime("%Y%m%d") for start_date in missing_ddates]
         #print(state_id," ,",mis_dates)
