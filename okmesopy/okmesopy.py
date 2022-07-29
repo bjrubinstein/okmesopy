@@ -1,4 +1,4 @@
-# mesonet_extractor.py
+# okmesopy.py
 #
 # Abhiram Pamula (apamula@okstate.edu)
 # Ben Rubinstein (brubinst@hawk.iit.edu)
@@ -21,9 +21,8 @@ from pyproj import CRS , Transformer
 from pandas.errors import EmptyDataError
 
 class MesonetExtractor:
-    """
-    """
-    
+
+
     def __init__(self, destination=None, verbose=False):
         '''
         init method for MesonetExtractor class
@@ -109,15 +108,15 @@ class MesonetExtractor:
                                     ' the verbose argument to True for more'
                                     ' details.')
 
-        
+
     def get_station_ids(self):
         '''
         Returns a list of all the valid station IDs (STIDs) from the metadata
             file
         '''
         return ' '.join(self.metadata['stid'].values[1:])
-    
-    
+
+
     def download_station_data(self,site_id,start_date,end_date):
         '''
         Method to download data for a single station over a specified time
@@ -179,7 +178,7 @@ class MesonetExtractor:
         final_df = pd.concat(df_list)
         final_df = final_df.reset_index(drop=True)
         return self.rep_unknown(final_df.copy(deep = True))
-    
+
 
     def rep_unknown(self,df):
         '''
@@ -193,7 +192,7 @@ class MesonetExtractor:
             df = df.replace(str(i),np.nan)
             df = df.replace(i,np.nan)
         return df
-    
+
 
     def download_bounding_box(self,bbox,start_date,end_date,padding=1):
         '''
@@ -279,8 +278,8 @@ class MesonetExtractor:
                 return None
         df = self.download_bounding_box(bbox,start_date,end_date,padding)
         return df
-      
-        
+
+
     def download_shape_file(self,shape_path,start_date,end_date,padding=1,prj_path=''):
         '''
         Reads a shape file from the specified path and downloads all data for
@@ -316,7 +315,7 @@ class MesonetExtractor:
             sf.close()
         return df
 
-    
+
     def fill_nei_state_data(self,master_df):
         '''
         Fills missing data using data from the nearest station.
@@ -339,8 +338,8 @@ class MesonetExtractor:
         #for param in clim_pars:
         #    master_df[clim_pars] = master_df[clim_pars].fillna(neighbor_df[clim_pars])
         #return master_df
-        
-        
+
+
     def change_crs(self, prj_path, bbox):
         '''
         Changes the CRS of a bounding box to EPSG:4269 used by Mesonet.
