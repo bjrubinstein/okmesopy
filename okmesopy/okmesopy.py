@@ -108,8 +108,16 @@ class MesonetExtractor:
                                     ' or downloaded from Mesonet. Try setting'
                                     ' the verbose argument to True for more'
                                     ' details.')
-        
 
+        
+    def get_station_ids(self):
+        '''
+        Returns a list of all the valid station IDs (STIDs) from the metadata
+            file
+        '''
+        return ' '.join(self.metadata['stid'].values[1:])
+    
+    
     def download_station_data(self,site_id,start_date,end_date):
         '''
         Method to download data for a single station over a specified time
