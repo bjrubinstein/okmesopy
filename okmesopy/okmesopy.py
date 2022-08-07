@@ -17,7 +17,7 @@ import numpy as np
 from datetime import timedelta, datetime
 from geopy import distance
 from shapefile import Reader
-from pyproj import CRS , Transformer
+from pyproj import CRS, Transformer
 from pandas.errors import EmptyDataError
 
 class MesonetExtractor:
@@ -108,6 +108,10 @@ class MesonetExtractor:
                                     ' the verbose argument to True for more'
                                     ' details.')
 
+        # convert the commission and decommision columns to datetime objects
+        self.metadata['datc'] = pd.to_datetime(self.metadata['datc'],format='%Y%m%d')
+        self.metadata['datd'] = pd.to_datetime(self.metadata['datd'],format='%Y%m%d')
+
 
     def get_station_ids(self):
         '''
@@ -134,6 +138,21 @@ class MesonetExtractor:
         if len(self.metadata[self.metadata['stid']==site_id.upper()]) == 0:
             print('Error: invalid site ID. Valid site IDs are:')
             print(' '.join(self.metadata['stid'].values[1:]))
+            return None
+        # check if station was active during the requested time period
+        datc = self.metadata.loc[self.metadata['stid'] == site_id.upper(),'datc'].item()
+        datd = self.metadata.loc[self.metadata['stid'] == site_id.upper(),'datd'].item()
+        if start_date < datc.date():
+            if self.verbose:
+                print('Warning: the {} station was commissioned on {} which'
+                      ' was after the requested start date of {}. It will be'
+                      ' skipped.'.format(site_id.upper(),datc,start_date))
+            return None
+        if end_date > datd.date():
+            if self.verbose:
+                print('Warning: the {} station was decommissioned on {} which'
+                      ' was before the requested end date of {}. It will be'
+                      ' skipped.'.format(site_id.upper(),datd,end_date))
             return None
         dates_list = []
         # create list of dates to download
@@ -177,7 +196,7 @@ class MesonetExtractor:
             return None
         final_df = pd.concat(df_list)
         final_df = final_df.reset_index(drop=True)
-        return self.rep_unknown(final_df.copy(deep = True))
+        return final_df
 
 
     def rep_unknown(self,df):
