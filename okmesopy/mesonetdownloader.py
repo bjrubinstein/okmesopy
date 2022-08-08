@@ -1,4 +1,4 @@
-# okmesopy.py
+# mesonetdownloader.py
 #
 # Abhiram Pamula (apamula@okstate.edu)
 # Ben Rubinstein (brubinst@hawk.iit.edu)
@@ -6,32 +6,34 @@
 # Some code based on nhdplusextractor by Mitchell Sawtelle
 #   (https://github.com/Msawtelle/PyNHDPlus)
 #
-# last updated: 07/22/2022
+# last updated: 08/07/2022
 #
-# contains the Mesonet Extractor class, which can be used to retrieve and
+# contains the MesonetDownloader class, which can be used to retrieve and
 # manipulate source data from the Mesonet dataset online
 import urllib.request
 import os
 import pandas as pd
 import numpy as np
 from datetime import timedelta, datetime
-from geopy import distance
 from shapefile import Reader
 from pyproj import CRS, Transformer
 from pandas.errors import EmptyDataError
 
-class MesonetExtractor:
-
+class MesonetDownloader:
+    '''
+    The MesonetDownloader class contains methods to generate time series from
+        the Oklahoma Mesonet climate dataset.
+    '''
 
     def __init__(self, destination=None, verbose=False):
         '''
-        init method for MesonetExtractor class
+        init method for MesonetDownloader class
 
         arguments:
             destination is the path to where the user would like the Mesonet
                 data to be stored if no argument is given the location of this
                 file is used
-            verbose is whether or not to write detailed debugging to stdout            
+            verbose is whether or not to write detailed debugging to stdout
         '''
         self.verbose = verbose
         # if no destination given in init method set destination to current
@@ -115,16 +117,14 @@ class MesonetExtractor:
 
     def get_station_ids(self):
         '''
-        Returns a list of all the valid station IDs (STIDs) from the metadata
-            file
+        Returns a list of all the valid station IDs (STIDs) from the metadata file
         '''
         return ' '.join(self.metadata['stid'].values[1:])
 
 
     def download_station_data(self,site_id,start_date,end_date):
         '''
-        Method to download data for a single station over a specified time
-            period
+        Method to download data for a single station over a specified time period
 
         arguments:
             site_id is the ID for the station, IDs are in the metadata file
@@ -187,8 +187,8 @@ class MesonetExtractor:
                     print('This means that there is no data available for the'
                           ' {} on {}.'.format(site_id,i))
             if not cur_df.empty:
-                cur_df["date"] =  datetime.strptime(i, '%Y%m%d')
-                cur_df["date_time"] = cur_df.apply(lambda x: x["date"]+timedelta(minutes = int(x["TIME"])), axis = 1)
+                cur_df['DATE'] =  datetime.strptime(i, '%Y%m%d')
+                cur_df['DATETIME'] = cur_df.apply(lambda x: x['DATE']+timedelta(minutes = int(x['TIME'])), axis = 1)
                 df_list.append(cur_df)
             elif self.verbose:
                 print('No data available for {} on {}.'.format(site_id,i))
@@ -197,20 +197,6 @@ class MesonetExtractor:
         final_df = pd.concat(df_list)
         final_df = final_df.reset_index(drop=True)
         return final_df
-
-
-    def rep_unknown(self,df):
-        '''
-        Replace error codes in the dataset with NaN.
-
-        arguments:
-            df is the dataframe to be manipulated
-        '''
-        # TODO: add verbose error code logging
-        for i in range(-999,-994):
-            df = df.replace(str(i),np.nan)
-            df = df.replace(i,np.nan)
-        return df
 
 
     def download_bounding_box(self,bbox,start_date,end_date,padding=1):
@@ -333,30 +319,6 @@ class MesonetExtractor:
         finally:
             sf.close()
         return df
-
-
-    def fill_nei_state_data(self,master_df):
-        '''
-        Fills missing data using data from the nearest station.
-
-        arguments:
-            master_df is the dataframe with missing dates to correct
-        ''' 
-        # TODO: get this working and optimize it
-        #missing_ddates = list(master_df[master_df.isna().any(axis=1)]['date'].unique())
-        #cols = list(master_df.columns)
-        #unwanted = ['STID', 'STNM', 'TIME', 'date', 'date_time']
-        #clim_pars =[i for i in cols if i not in unwanted]
-        #mis_dates = [pd.to_datetime(start_date).strftime("%Y%m%d") for start_date in missing_ddates]
-        #print(state_id," ,",mis_dates)
-        #neighbor_df = self.download_data(state_id,mis_dates)
-        #if neighbor_df is None:
-        #    return master_df
-        #neighbor_df = self.rep_unknown(neighbor_df)
-        #neighbor_df.set_index(["date_time"], inplace = True)
-        #for param in clim_pars:
-        #    master_df[clim_pars] = master_df[clim_pars].fillna(neighbor_df[clim_pars])
-        #return master_df
 
 
     def change_crs(self, prj_path, bbox):
