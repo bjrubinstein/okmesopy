@@ -6,7 +6,7 @@
 # Some code based on nhdplusextractor by Mitchell Sawtelle
 #   (https://github.com/Msawtelle/PyNHDPlus)
 #
-# last updated: 08/07/2022
+# last updated: 08/10/2022
 #
 # contains the MesonetDownloader class, which can be used to retrieve and
 # manipulate source data from the Mesonet dataset online
@@ -30,10 +30,10 @@ class MesonetDownloader:
         init method for MesonetDownloader class
 
         arguments:
-            destination is the path to where the user would like the Mesonet
-                data to be stored if no argument is given the location of this
-                file is used
-            verbose is whether or not to write detailed debugging to stdout
+            destination (str): the path to where the user would like the
+                Mesonet data to be stored if no argument is given the location
+                of the file being run is used
+            verbose (bool): if true write detailed debugging to stdout
         '''
         self.verbose = verbose
         # if no destination given in init method set destination to current
@@ -44,7 +44,7 @@ class MesonetDownloader:
             self.destination = destination
         # replace slashes in Windows style paths
         self.destination = self.destination.replace('\\','/')
-        
+
         try:
             if not os.path.isdir(self.destination): os.mkdir(self.destination)
         except PermissionError:
@@ -52,7 +52,7 @@ class MesonetDownloader:
                       ' not have permission to create it.\n{}\nPlease set the'
                       ' destination argument to a different folder.')
             raise PermissionError(errstr.format(self.destination))
-                  
+
         # set up directory structure
         # mts_files holds the downloaded raw data from Mesonet
         # time_series holds saved dataframes as csvs
@@ -65,13 +65,13 @@ class MesonetDownloader:
                       ' change the permissions or choose a different'
                       ' destination folder.')
             raise PermissionError(errstr.format(self.mts_dir))
-        
+
         # number of times to try in case of failed data retrieval
         self.TTL = 2
-        
+
         # mesonet base url
         self.base_url = 'http://www.mesonet.org/index.php/'
-        
+
         # attempt to read metadata from file
         self.metadata = pd.DataFrame()
         try:
@@ -88,7 +88,7 @@ class MesonetDownloader:
                 print('Attempting to download from Mesonet.')
         finally:
             # if we failed to read the file locally, attempt to download
-            if self.metadata.empty: 
+            if self.metadata.empty:
                 meta_path = 'api/siteinfo/from_all_active_with_geo_fields/format/csv/'
                 meta_url = '{}{}'.format(self.base_url,meta_path)
                 attempt = 0
@@ -102,7 +102,7 @@ class MesonetDownloader:
                             print('Attempt number {} to download metadata failed: {}'.format(attempt+1,meta_url))
                             print(e)
                     attempt += 1
-        
+
         # raise an exception if the metadata file couldn't be read
         if self.metadata.empty:
             raise FileNotFoundError('Metadata file could not be found locally'
@@ -118,6 +118,9 @@ class MesonetDownloader:
     def get_station_ids(self):
         '''
         Returns a list of all the valid station IDs (STIDs) from the metadata file
+
+        returns:
+            str: a list of all the station IDs separated by spaces
         '''
         return ' '.join(self.metadata['stid'].values[1:])
 
@@ -127,9 +130,13 @@ class MesonetDownloader:
         Method to download data for a single station over a specified time period
 
         arguments:
-            site_id is the ID for the station, IDs are in the metadata file
-            start_date is the first date to get data as a Python date object
-            end_date is the first date to get data as a Python date object
+            site_id (str): the ID for the station, IDs are in the metadata file
+            start_date (datetime.date): first date to get data
+            end_date (datetime.date): last date (inclusive) to get data
+
+        returns:
+            DataFrame: a pandas DataFrame containing the downloaded data sorted
+                by datetime
         '''
         # note: site ids are in all caps in the metadata file but all lowercase
         #   in the URLs, this ensures that our code is case-insensitive
@@ -204,12 +211,16 @@ class MesonetDownloader:
         Downloads data for all the stations found within a bounding box.
 
         arguments:
-            bbox is the bounding box to be searched; it expects the same format
+            bbox (list): the bounding box to be searched; it expects the same format
                 as used in pyshp, [low longitude, low latitude, highlon, highlat]
-            start_date is the first date to get data as a Python date object
-            end_date is the first date to get data as a Python date object
-            padding is an optional parameter that increases or decreases the
-                size of the bounding box, must be positive
+            start_date (datetime.date): first date to get data
+            end_date (datetime.date): last date (inclusive) to get data
+            padding (int): an optional parameter that increases or decreases
+                the size of the bounding box, must be positive
+
+        returns:
+            dict: a dictionary with station IDs as keys and DataFrames holding
+                the downloaded data as values
         '''
         # make bbox coordinates easier to work with
         lowlon = bbox[0]
@@ -239,16 +250,11 @@ class MesonetDownloader:
                 print(bbox)
                 print('Try increasing the padding argument.')
             return None
-        # download data for each station
-        station_dfs = []
+        # download data for each station and save them in a dictionary
+        station_dfs = dict()
         for stid in station_ids:
-            station_dfs.append(self.download_station_data(stid, start_date, end_date))
-        # concatenate all the station data
-        master_df = pd.DataFrame()
-        for df in station_dfs:
-            master_df = pd.concat([master_df,df], axis=0)
-        master_df = master_df.reset_index(drop=True)
-        return master_df
+            station_dfs[stid] = self.download_station_data(stid, start_date, end_date)
+        return station_dfs
 
 
     def download_shape_object(self,shape,start_date,end_date,padding=1,prj_path=''):
@@ -257,14 +263,19 @@ class MesonetDownloader:
             all stations within its bounding box
 
         arguments:
-            shape is a PyShp Reader or Shape object
-            start_date is the first date to get data as a Python date object
-            end_date is the first date to get data as a Python date object
-            padding is an optional parameter that increases or decreases the
-                size of the bounding box, must be positive
-            prj_path is an optional parameter that points to the .prj file
+            shape (shapefile.Shape or shapefile.Reader): the shape object to be
+                searched for stations
+            start_date (datetime.date): first date to get data
+            end_date (datetime.date): last date (inclusive) to get data
+            padding (int): an optional parameter that increases or decreases
+                the size of the bounding box, must be positive
+            prj_path (str): an optional parameter that points to the .prj file
                 associated with the shape file; if this specified then the
                 bounding box coordinates will be converted to EPSG:4269
+
+        returns:
+            dict: a dictionary with station IDs as keys and DataFrames holding
+                the downloaded data as values
         '''
         bbox = shape.bbox
         # convert the coordinates to the correct CRS is the path to a
@@ -291,14 +302,18 @@ class MesonetDownloader:
             all stations within its bounding box
 
         arguments:
-            shape_file is the path to the shape file to be used
-            start_date is the first date to get data as a Python date object
-            end_date is the first date to get data as a Python date object
-            padding is an optional parameter that increases or decreases the
-                size of the bounding box, must be positive
-            prj_path is an optional parameter that points to the .prj file
+            shape_file (str): the path to the shape file to be used
+            start_date (datetime.date): first date to get data
+            end_date (datetime.date): last date (inclusive) to get data
+            padding (int): an optional parameter that increases or decreases
+                the size of the bounding box, must be positive
+            prj_path (str): an optional parameter that points to the .prj file
                 associated with the shape file; if this specified then the
                 bounding box coordinates will be converted to EPSG:4269
+
+        returns:
+            dict: a dictionary with station IDs as keys and DataFrames holding
+                the downloaded data as values
         '''
         # the whole method is wrapped in a try to make sure we release the
         #   shape file regardless of any exceptions
@@ -326,9 +341,12 @@ class MesonetDownloader:
         Changes the CRS of a bounding box to EPSG:4269 used by Mesonet.
 
         arguments:
-            crs_path is the path to the .prj file for the original box
-            bbox is the bounding box to be converted; it expects the same format
+            crs_path (str): the path to the .prj file for the original box
+            bbox (list): the bounding box to be converted; it expects the same format
                 as used in pyshp, [low longitude, low latitude, highlon, highlat]
+
+        returns:
+            list: the converted bounding box coordinates
         '''
         # The coordinates for each station in the metadata file come from a
         #   shape file that uses EPSG:4269
