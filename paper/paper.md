@@ -30,3 +30,5 @@ Data files from the Mesonet website are available as either the complete dataset
 A major issue in climate research is handling missing data from datasets [Richman:2008]. A number of Mesonet variables are collected on a longer time interval than 5 minutes and are missing data on the off intervals. Additionally data may be missing due to failing Mesonet's rigorous QA process, stations failing to report, or calibration issues [@McPherson:2007]. `OKMesoPy` provides three methods for filling missing data: simple linear interpolation between known values, copying data from the nearest neighboring station, and an iterative multiple linear regression method as described by Richman *et al.* (2008).
 
 `OKMesoPy` was originally written with the intention of creating time series for use in PyHSPF models and it provides methods for extracting PyHSPF formatted time series from the downloaded data [Lampert:2015]. However, `OKMesoPy` is generic enough to assist with any kind of research using the Mesonet dataset.
+
+# References
