@@ -3,7 +3,7 @@
 # Abhiram Pamula (apamula@okstate.edu)
 # Ben Rubinstein (brubinst@hawk.iit.edu)
 #
-# last updated: 08/07/2022
+# last updated: 08/10/2022
 #
 # contains the MesonetTools class
 import pandas as pd
@@ -21,17 +21,17 @@ class MesonetTools:
         init method for the MesonetTools class
 
         arguments:
-            verbose is whether or not to write detailed debugging to stdout            
+            verbose (bool): if true write detailed debugging to stdout
         '''
         self.verbose=verbose
-        # 
+        #
         self.nondatcols=['STID','STNM','TIME','DATE','DATETIME']
 
 
-    def replace_errors(self,df,code=1):
+    def replace_errors(self,df,code=1,column=None):
         '''
         Replace error codes in the dataset with NaN.
-        
+
         Description of error codes:
             -999 - flagged bad by QA routines
             -998 - sensor not installed
@@ -40,32 +40,95 @@ class MesonetTools:
             -995 - data not reported on this time interval
             -994 - value is too wide to fit in column
         arguments:
-            df is the dataframe to be manipulated
-            code is the specific error code to be replaced, the default 1
+            df (DataFrame or dict): the dataframe or dictionary of dataframes
+                to be manipulated
+            code (int): the specific error code to be replaced, the default 1
                 replaces all error codes
+            column (str): optional parameter that when specified changes only
+                a single column
         '''
-        if code==1:
-            for i in range(-999,-994):
-                df = df.replace(str(i),np.nan)
-                df = df.replace(i,np.nan)
-        # check if code is a valid error code
-        elif code >= -999 and code <= -994:
-            df = df.replace(str(i),np.nan)
-            df = df.replace(i,np.nan)
-        elif self.verbose:
-            print('Warning: {} is not a valid error code. Nothing will be'
-                  ' replaced. Use 1 or do not pass in a code argument to'
-                  ' replace all error codes or enter one of the following:'
-                  ' -994, -995, -996, -997, -998, -999.')
-            print('help(MesonetTools.replace_errors) will give a description'
-                  ' of the error codes.')
+        # check if we've been given a dict or dataframe
+        if self.is_dict(df)==-1:
+            if self.verbose:
+                print('Warning: replace_errors() expects a DataFrame or dict'
+                      ' not a {}. No actions performed.'.format(type(df)))
+        # check that the error code argument is valid
+        elif code != 1 and (code > -994 or code < -999):
+            if self.verbose:
+                print('Warning: {} is not a valid error code. Nothing will'
+                      ' be replaced. Use 1 or do not pass in a code argument'
+                      ' to replace all error codes or enter one of the following:'
+                      ' -994, -995, -996, -997, -998, -999.'.format(code))
+                print('help(MesonetTools.replace_errors) will give a'
+                      ' description of the error codes.')
+        # if df is a dictionary, recursively call this function for each of its keys
+        elif self.is_dict(df)==1:
+            for key in df:
+                df[key] = self.replace_errors(df[key],code,column)
+        # if df is a dataframe
+        elif self.is_dict(df)==0:
+            if code==1:
+                # replace all error codes with NaN
+                for i in range(-999,-994):
+                    if column is None:
+                        # replace for all columns
+                        df = df.replace(str(i),np.nan)
+                        df = df.replace(i,np.nan)
+                    else:
+                        # check if the column exists
+                        if column in df.columns:
+                            # replace for a single column
+                            df[column] = df[column].replace(str(i),np.nan)
+                            df[column] = df[column].replace(i,np.nan)
+                        elif self.verbose:
+                            print('Warning: there is no column named {}'
+                                  ' in the dataframe. No actions will be'
+                                  ' taken.'.format(column))
+            # check if code is a valid error code
+            else:
+                if column is None:
+                    # replace for all columns
+                    df = df.replace(code,np.nan)
+                    df = df.replace(code,np.nan)
+                else:
+                    # check if the column exists
+                    if column in df.columns:
+                        # replace for a single column
+                        df[column] = df[column].replace(code,np.nan)
+                        df[column] = df[column].replace(code,np.nan)
+                    elif self.verbose:
+                        print('Warning: there is no column named {}'
+                              ' in the dataframe. No actions will be'
+                              ' taken.'.format(column))
         return df
 
 
-    def interpolate_missing(self,df,codes,columns):
+    def interpolate_missing(self,df,codes=1,column=None):
         '''
-        Fills missing data with simple linear interpolation between 
+        Fills missing data with simple linear interpolation between known
+            values
 
         arguments:
-            verbose is whether or not to write detailed debugging to stdout            
+            df is the dataframe to manipulated
+            codes is an optional argument
         '''
+
+
+    def is_dict(self,df):
+        '''
+        MesonetDownloader creates single dataframes and dictionaries of
+            dataframes. Returns 1 for dict, 0 for dataframe, and -1 as an
+            error code for anything else
+
+        arguments:
+            df (DataFrame or dict): the object to type check
+
+        returns:
+            int: 1 for a dictionary, 0 for a DataFrame, -1 otherwise
+        '''
+        if isinstance(df,dict):
+            return 1
+        elif isinstance(df,pd.DataFrame):
+            return 0
+        else:
+            return -1
