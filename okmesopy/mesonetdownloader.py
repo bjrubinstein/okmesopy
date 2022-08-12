@@ -125,12 +125,35 @@ class MesonetDownloader:
         return ' '.join(self.metadata['stid'].values[1:])
 
 
+    def get_station_coord(self,site_id):
+        '''
+        Returns the coordinates for a given station ID
+
+        arguments:
+            site_id (str): case-insensitive site ID as listed in the metadata
+                file
+
+        returns:
+            tuple: lat/lon coordinates for the station
+        '''
+        # check if site id is valid
+        if len(self.metadata[self.metadata['stid']==site_id.upper()]) == 0:
+            if self.verbose:
+                print('Error: invalid site ID. Valid site IDs are:')
+                print(' '.join(self.metadata['stid'].values[1:]))
+            return None
+        lat = self.metadata.loc[self.metadata['stid'] == site_id.upper(),'nlat'].item()
+        lon = self.metadata.loc[self.metadata['stid'] == site_id.upper(),'elon'].item()
+        return (lat,lon)
+
+
     def download_station_data(self,site_id,start_date,end_date):
         '''
         Method to download data for a single station over a specified time period
 
         arguments:
             site_id (str): the ID for the station, IDs are in the metadata file
+                case-insensitive
             start_date (datetime.date): first date to get data
             end_date (datetime.date): last date (inclusive) to get data
 
@@ -143,8 +166,9 @@ class MesonetDownloader:
         site_id = site_id.lower()
         # check if site id is valid
         if len(self.metadata[self.metadata['stid']==site_id.upper()]) == 0:
-            print('Error: invalid site ID. Valid site IDs are:')
-            print(' '.join(self.metadata['stid'].values[1:]))
+            if self.verbose:
+                print('Error: invalid site ID. Valid site IDs are:')
+                print(' '.join(self.metadata['stid'].values[1:]))
             return None
         # check if station was active during the requested time period
         datc = self.metadata.loc[self.metadata['stid'] == site_id.upper(),'datc'].item()
@@ -253,7 +277,9 @@ class MesonetDownloader:
         # download data for each station and save them in a dictionary
         station_dfs = dict()
         for stid in station_ids:
-            station_dfs[stid] = self.download_station_data(stid, start_date, end_date)
+            station_df = self.download_station_data(stid, start_date, end_date)
+            if station_df is not None:
+                station_dfs[stid] = station_df
         return station_dfs
 
 

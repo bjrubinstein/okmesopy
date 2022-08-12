@@ -9,6 +9,7 @@
 import pandas as pd
 import numpy as np
 from okmesopy import MesonetDownloader
+from geopy import distance
 
 class MesonetTools:
     '''
@@ -61,8 +62,8 @@ class MesonetTools:
             if self.verbose:
                 print('Warning: {} is not a valid error code. Nothing will'
                       ' be replaced. Use 1 or do not pass in a code argument'
-                      ' to replace all error codes or enter one of the following:'
-                      ' -994, -995, -996, -997, -998, -999.'.format(code))
+                      ' to replace all error codes or enter one of the'
+                      ' following: {}.'.format(code,self.errorcodes))
                 print('help(MesonetTools.replace_errors) will give a'
                       ' description of the error codes.')
         # if df is a dictionary, recursively call this function for each of its keys
@@ -138,7 +139,7 @@ class MesonetTools:
                       ' changes will be made. Use an empty list or do not pass'
                       ' in the codes argument to replace all error codes or'
                       ' enter at least one of the following valid error codes:'
-                      ' -994, -995, -996, -997, -998, -999.'.format(codes))
+                      ' {}'.format(codes,self.errorcodes))
                 print('help(MesonetTools.replace_errors) will give a'
                       ' description of the error codes.')
         # if df is a dictionary, recursively call this function for each of its keys
@@ -163,22 +164,127 @@ class MesonetTools:
             if codes:
                 df = self.copy_errors(df,backup,codes,column)
         return df
-                            
+
+
+    def fill_neighbor_data(self,df,downloader,codes=[],column=None):
+        '''
+        Fills missing data with the value from the geographically closest
+            station that has the missing observation
+        
+        This method will automatically ignore -995 error codes and the
+            following columns: 'STID','STNM','TIME','DATE','DATETIME'
+
+        arguments:
+            df (DataFrame or dict): the dataframe or dictionary of dataframes
+                to be manipulated
+            downloader (MesonetDownloader): a MesonetDownloader object is
+                required to calculate distances and download new data
+            codes (list): optional parameter that when specified interpolates
+                only for the specified codes
+            column (str): optional parameter that when specified changes only
+                a single column
+
+        returns:
+            DataFrame or dict: the modified df object
+        '''
+        # make sure that downloader is a MesonetDownloader object
+        if not isinstance(downloader, MesonetDownloader):
+            if self.verbose:
+                print('Warning: downloader must be an okmesopy.MesonetDownloader'
+                      ' object not a {}. No changes will be made.'.format(type(downloader)))
+        # check if we've been given a dict or dataframe
+        elif self.is_dict(df)==-1:
+            if self.verbose:
+                print('Warning: fill_neighbor_data() expects a DataFrame or'
+                      ' dict not a {}. No actions performed.'.format(type(df)))
+        # check that at least one error code in the list is valid
+        elif codes and all(i not in self.errorcodes for i in codes):
+            if self.verbose:
+                print('Warning: No valid error codes were entered: {}. No'
+                      ' changes will be made. Use an empty list or do not pass'
+                      ' in the codes argument to replace all error codes or'
+                      ' enter at least one of the following valid error codes:'
+                      ' {}'.format(codes,self.errorcodes))
+                print('help(MesonetTools.replace_errors) will give a'
+                      ' description of the error codes.')
+        # if df is a dictionary, recursively call this function for each of its keys
+        elif self.is_dict(df)==1:
+            for key in df:
+                df[key] = self.fill_neighbor_data(df[key],downloader,codes,column)
+        else:
+            stid = df.loc[0,'STID']
+            print(stid)
+            df.set_index(['DATETIME'],inplace=True)
+            if not codes:
+                codes = self.errorcodes
+            # skip -995, no stations will have data on the not sampled intervals
+            if -995 in codes: codes.remove(-995)
+            for code in codes:
+                df = self.replace_errors(df,code,column)
+            # replace all error codes
+            df = self.replace_errors(df,column=column)
+            # create a list of stations sorted by distance
+            target_coord = downloader.get_station_coord(stid)
+            coord_tuple = list(downloader.metadata.loc[:,['nlat','elon']].itertuples(index = False, name = None))
+            for i in coord_tuple:
+                if i == target_coord:
+                    coord_tuple.remove(i)
+            req_loc = downloader.metadata['stid'].loc[downloader.metadata['stid']!=stid]
+            station_list=[]
+            for i,j in zip(req_loc,coord_tuple):
+                station_list.append([i,distance.distance(target_coord,j).miles])
+            station_list = sorted(station_list, key = lambda x:(x[1], x[0]))
+            stids = [i[0] for i in station_list]
+            for station in stids:
+                # break when all data has been filled
+                if df.isnull().sum().sum()==0:
+                    break
+                df = self.download_neighbor(df,downloader,station)
+            df = df.reset_index()
+        return df
+                
+
+    def download_neighbor(self,df,downloader,station_id):
+        '''
+        Helper function that downloads and fills data from a neighboring station
+
+        arguments:
+            df (DataFrame): the dataframe with missing data to be filled 
+            downloader (MesonetDownloader): a MesonetDownloader object is
+                required to download new data
+            station_id (str): the station ID for the neighboring station
+
+        returns:
+            DataFrame: the modified df object
+        '''
+        # get a list of missing dates from the 
+        missing_dates = list(df[df.isna().any(axis=1)]['DATE'].unique())
+        # download data for each of the missing dates
+        for miss_date in missing_dates:
+            date = pd.to_datetime(miss_date).date()
+            neighbor_df = downloader.download_station_data(station_id,date,date)
+            if neighbor_df is not None:
+                # we don't want to copy over any error codes so replace all of them
+                neighbor_df = self.replace_errors(neighbor_df)
+                # fill in data
+                neighbor_df.set_index(['DATETIME'],inplace=True)
+                df = df.fillna(neighbor_df)
+        return df
+
 
     def copy_errors(self,df,backup,codes,column=None):
         '''
         Helper function that copies error codes back into a dataframe
 
         arguments:
-            df (DataFrame): the dataframe or dictionary of dataframes to be
-                manipulated
+            df (DataFrame): the dataframe
             backup (DataFrame): a copy of df with error codes still in place 
             codes (list): a list of codes to copy back into df
             column (str): optional parameter that when specified changes only
                 a single column
 
         returns:
-            DataFrame or dict: the modified df object
+            DataFrame: the modified df object
         '''
         # TODO: fix the SettingWithCopyError?
         pd.options.mode.chained_assignment = None
