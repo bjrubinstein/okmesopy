@@ -24,8 +24,9 @@ class MesonetTools:
             verbose (bool): if true write detailed debugging to stdout
         '''
         self.verbose=verbose
-        #
+        # these are used internally when replacing data
         self.nondatcols=['STID','STNM','TIME','DATE','DATETIME']
+        self.errorcodes=[-994,-995,-996,-997,-998,-999]
 
 
     def replace_errors(self,df,code=1,column=None):
@@ -46,6 +47,9 @@ class MesonetTools:
                 replaces all error codes
             column (str): optional parameter that when specified changes only
                 a single column
+
+        returns:
+            DataFrame or dict: the modified df object
         '''
         # check if we've been given a dict or dataframe
         if self.is_dict(df)==-1:
@@ -53,7 +57,7 @@ class MesonetTools:
                 print('Warning: replace_errors() expects a DataFrame or dict'
                       ' not a {}. No actions performed.'.format(type(df)))
         # check that the error code argument is valid
-        elif code != 1 and (code > -994 or code < -999):
+        elif code != 1 and code not in self.errorcodes:
             if self.verbose:
                 print('Warning: {} is not a valid error code. Nothing will'
                       ' be replaced. Use 1 or do not pass in a code argument'
@@ -69,7 +73,7 @@ class MesonetTools:
         elif self.is_dict(df)==0:
             if code==1:
                 # replace all error codes with NaN
-                for i in range(-999,-994):
+                for i in self.errorcodes:
                     if column is None:
                         # replace for all columns
                         df = df.replace(str(i),np.nan)
@@ -103,15 +107,90 @@ class MesonetTools:
         return df
 
 
-    def interpolate_missing(self,df,codes=1,column=None):
+    def interpolate_missing(self,df,codes=[],column=None):
         '''
         Fills missing data with simple linear interpolation between known
             values
+        
+        This method will automatically ignore the following columns:
+            'STID','STNM','TIME','DATE','DATETIME'
 
         arguments:
-            df is the dataframe to manipulated
-            codes is an optional argument
+            df (DataFrame or dict): the dataframe or dictionary of dataframes
+                to be manipulated
+            codes (list): optional parameter that when specified interpolates
+                only for the specified codes
+            column (str): optional parameter that when specified changes only
+                a single column
+
+        returns:
+            DataFrame or dict: the modified df object
         '''
+        # check if we've been given a dict or dataframe
+        if self.is_dict(df)==-1:
+            if self.verbose:
+                print('Warning: interpolate_missing() expects a DataFrame or'
+                      ' dict not a {}. No actions performed.'.format(type(df)))
+        # check that at least one error code in the list is valid
+        elif codes and all(i not in self.errorcodes for i in codes):
+            if self.verbose:
+                print('Warning: No valid error codes were entered: {}. No'
+                      ' changes will be made. Use an empty list or do not pass'
+                      ' in the codes argument to replace all error codes or'
+                      ' enter at least one of the following valid error codes:'
+                      ' -994, -995, -996, -997, -998, -999.'.format(codes))
+                print('help(MesonetTools.replace_errors) will give a'
+                      ' description of the error codes.')
+        # if df is a dictionary, recursively call this function for each of its keys
+        elif self.is_dict(df)==1:
+            for key in df:
+                df[key] = self.interpolate_missing(df[key],codes,column)
+        else:
+            backup = pd.DataFrame()
+            if codes:
+                # store a backup so we can recovery error codes that shouldn't
+                #   be replaced
+                backup = df
+            # replace all error codes
+            df = self.replace_errors(df,column=column)
+            if column is None:
+                for ncolumn in df.columns:
+                    if ncolumn not in self.nondatcols:
+                        df[ncolumn] = df[ncolumn].interpolate()
+            else:
+                df[column] = df[column].interpolate()
+            # if there were specific error codes provided, recover the others
+            if codes:
+                df = self.copy_errors(df,backup,codes,column)
+        return df
+                            
+
+    def copy_errors(self,df,backup,codes,column=None):
+        '''
+        Helper function that copies error codes back into a dataframe
+
+        arguments:
+            df (DataFrame): the dataframe or dictionary of dataframes to be
+                manipulated
+            backup (DataFrame): a copy of df with error codes still in place 
+            codes (list): a list of codes to copy back into df
+            column (str): optional parameter that when specified changes only
+                a single column
+
+        returns:
+            DataFrame or dict: the modified df object
+        '''
+        # TODO: fix the SettingWithCopyError?
+        pd.options.mode.chained_assignment = None
+        for code in self.errorcodes:
+            if code not in codes:
+                if column is not None:
+                    df[column].loc[backup[column]==code] = code
+                else:
+                    for ncolumn in df.columns:
+                        df[ncolumn].loc[backup[ncolumn]==code] = code
+        pd.options.mode.chained_assignment = 'warn'
+        return df
 
 
     def is_dict(self,df):
