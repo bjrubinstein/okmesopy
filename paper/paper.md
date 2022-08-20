@@ -9,11 +9,14 @@ tags:
 authors:
   - name: Benjamin J. Rubinstein
     orcid: 0000-0001-5852-2555
+    equal-contrib: true
     affiliation: 1
   - name: Abhiram S.P. Pamula
     affiliation: 2
 affiliations:
  - name: Illinois Institute of Technology, Department of Civil, Architectural, and Environmental Engineering
+ - orcid: 0000-0002-1880-2330
+ - equal-contrib: true
    index: 1
  - name: Oklahoma State University, School of Civil and Environmental Engineering
    index: 2
