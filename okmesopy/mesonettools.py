@@ -53,7 +53,7 @@ class MesonetTools:
             DataFrame or dict: the modified df object
         '''
         # check if we've been given a dict or dataframe
-        if self.is_dict(df)==-1:
+        if self.__is_dict(df)==-1:
             if self.verbose:
                 print('Warning: replace_errors() expects a DataFrame or dict'
                       ' not a {}. No actions performed.'.format(type(df)))
@@ -67,11 +67,11 @@ class MesonetTools:
                 print('help(MesonetTools.replace_errors) will give a'
                       ' description of the error codes.')
         # if df is a dictionary, recursively call this function for each of its keys
-        elif self.is_dict(df)==1:
+        elif self.__is_dict(df)==1:
             for key in df:
                 df[key] = self.replace_errors(df[key],code,column)
         # if df is a dataframe
-        elif self.is_dict(df)==0:
+        elif self.__is_dict(df)==0:
             if code==1:
                 # replace all error codes with NaN
                 for i in self.errorcodes:
@@ -128,7 +128,7 @@ class MesonetTools:
             DataFrame or dict: the modified df object
         '''
         # check if we've been given a dict or dataframe
-        if self.is_dict(df)==-1:
+        if self.__is_dict(df)==-1:
             if self.verbose:
                 print('Warning: interpolate_missing() expects a DataFrame or'
                       ' dict not a {}. No actions performed.'.format(type(df)))
@@ -143,7 +143,7 @@ class MesonetTools:
                 print('help(MesonetTools.replace_errors) will give a'
                       ' description of the error codes.')
         # if df is a dictionary, recursively call this function for each of its keys
-        elif self.is_dict(df)==1:
+        elif self.__is_dict(df)==1:
             for key in df:
                 df[key] = self.interpolate_missing(df[key],codes,column)
         else:
@@ -162,7 +162,7 @@ class MesonetTools:
                 df[column] = df[column].interpolate()
             # if there were specific error codes provided, recover the others
             if codes:
-                df = self.copy_errors(df,backup,codes,column)
+                df = self.__copy_errors(df,backup,codes,column)
         return df
 
 
@@ -193,7 +193,7 @@ class MesonetTools:
                 print('Warning: downloader must be an okmesopy.MesonetDownloader'
                       ' object not a {}. No changes will be made.'.format(type(downloader)))
         # check if we've been given a dict or dataframe
-        elif self.is_dict(df)==-1:
+        elif self.__is_dict(df)==-1:
             if self.verbose:
                 print('Warning: fill_neighbor_data() expects a DataFrame or'
                       ' dict not a {}. No actions performed.'.format(type(df)))
@@ -208,7 +208,7 @@ class MesonetTools:
                 print('help(MesonetTools.replace_errors) will give a'
                       ' description of the error codes.')
         # if df is a dictionary, recursively call this function for each of its keys
-        elif self.is_dict(df)==1:
+        elif self.__is_dict(df)==1:
             for key in df:
                 df[key] = self.fill_neighbor_data(df[key],downloader,codes,column)
         else:
@@ -239,12 +239,12 @@ class MesonetTools:
                 # break when all data has been filled
                 if df.isnull().sum().sum()==0:
                     break
-                df = self.download_neighbor(df,downloader,station)
+                df = self.__download_neighbor(df,downloader,station)
             df = df.reset_index()
         return df
                 
 
-    def download_neighbor(self,df,downloader,station_id):
+    def __download_neighbor(self,df,downloader,station_id):
         '''
         Helper function that downloads and fills data from a neighboring station
 
@@ -272,12 +272,12 @@ class MesonetTools:
         return df
 
 
-    def copy_errors(self,df,backup,codes,column=None):
+    def __copy_errors(self,df,backup,codes,column=None):
         '''
         Helper function that copies error codes back into a dataframe
 
         arguments:
-            df (DataFrame): the dataframe
+            df (DataFrame): the dataframe to be manipulated
             backup (DataFrame): a copy of df with error codes still in place 
             codes (list): a list of codes to copy back into df
             column (str): optional parameter that when specified changes only
@@ -291,6 +291,9 @@ class MesonetTools:
         for code in self.errorcodes:
             if code not in codes:
                 if column is not None:
+                    # these commands cause a SettingWithCopyError. I think it
+                    #   is a false positive but I'm not fully sure I
+                    #   understand the error properly
                     df[column].loc[backup[column]==code] = code
                 else:
                     for ncolumn in df.columns:
@@ -299,7 +302,7 @@ class MesonetTools:
         return df
 
 
-    def is_dict(self,df):
+    def __is_dict(self,df):
         '''
         MesonetDownloader creates single dataframes and dictionaries of
             dataframes. Returns 1 for dict, 0 for dataframe, and -1 as an
