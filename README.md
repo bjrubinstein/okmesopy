@@ -7,9 +7,10 @@ OKMesoPy is a package to aid in downloading and manipulating the Oklahoma Mesone
 **Core Dependencies:**
 - NumPy
 - Pandas
+- GeoPy
+- Missingno
 - PyShp
 - PyProj
-- GeoPy
 
 **Additional Dependencies:**
 - MatPlotLib is required to run the examples

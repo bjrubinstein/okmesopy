@@ -8,6 +8,7 @@
 # contains the MesonetTools class
 import pandas as pd
 import numpy as np
+import missingno as msno
 from okmesopy import MesonetDownloader
 from geopy import distance
 
@@ -242,7 +243,64 @@ class MesonetTools:
                 df = self.__download_neighbor(df,downloader,station)
             df = df.reset_index()
         return df
-                
+
+
+    def summarize_missing(self,df,graph=False):
+        '''
+        Summarizes error codes in the provided dataframe
+
+        arguments:
+            df (DataFrame): the dataframe with missing data to be summarized
+            graph (bool): an optional arugument that if true will generate
+                visualization of the missing data using the missingno library
+        '''
+        # Generate a new dataframe that will hold the error info
+        cols = df.columns.to_list()
+        for col in self.nondatcols: cols.remove(col)
+        errors = pd.DataFrame()
+        # loop through each column
+        for col in cols:
+            # count the error codes
+            counts = df.groupby(col).size()
+            for error in self.errorcodes:
+                # populate the error dataframe
+                try:
+                    count = counts[error]
+                    errors.loc[col,error]=int(count)
+                except:
+                    # a key value error here means there were none of this
+                    # error code in this column
+                    errors.loc[col,error]=int(0)
+            # add a total value for each column
+            errors.loc[col,'TOTAL']=int(errors.loc[col,:].sum())
+        # add a total for the error codes as well
+        for col in errors.columns:
+            errors.loc['TOTAL',col]=int(errors.loc[:,col].sum())
+        # total values
+        total = errors.sum().sum()
+        total_corrected = total - errors.loc[:,-995].sum()
+        # print a summary of the missing data
+        print('Missing data summary for {} station:'.format(df.loc[0,'STID']))
+        print('-----------------------')
+        print('To see a description of each error code run help(MesonetTools.replace_errors)')
+        print('Note: the -995 error code is used when data is not collected'
+              ' on an interval. This code is generally normal and expected.')
+        print('There are {} total missing data points and {} missing data'
+              ' data points excluding -995 codes'.format(total,total_corrected))
+        print('The following chart displays the number of each kind of error'
+              ' code found in each column of the DataFrame.\n')
+        print(errors)
+        # graphically display errors if the chart arguement is true
+        if graph:
+            # prepare a dataframe for the missingno library, we need to
+            # actually replace all the error codes with NaN so missingno can
+            # recognize them
+            rep_df = self.replace_errors(df)
+            # also remove non data columns and set the index to DATETIME
+            for col in self.nondatcols:
+                if not col=='DATETIME': rep_df.drop(col,axis=1,inplace=True)
+            msno.matrix(rep_df.set_index('DATETIME'),freq='5M')
+
 
     def __download_neighbor(self,df,downloader,station_id):
         '''

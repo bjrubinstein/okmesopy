@@ -13,6 +13,7 @@ setup(name='okmesopy',
                         'pyshp',
                         'pyproj',
                         'geopy',
+                        'missingno',
                         ],
       keywords=['Mesonet','climatology','meteorology','hydrology'],
       zip_safe=False)
