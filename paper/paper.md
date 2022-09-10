@@ -12,11 +12,14 @@ authors:
     equal-contrib: true
     affiliation: 1
   - name: Abhiram S.P. Pamula
+  - orcid: 0000-0002-1880-2330
+    equal-contrib: true
     affiliation: 2
+  - name: David J. Lampert
+    orcid: 0000-0001-7357-1873
+    affiliation: 1 
 affiliations:
  - name: Illinois Institute of Technology, Department of Civil, Architectural, and Environmental Engineering
- - orcid: 0000-0002-1880-2330
- - equal-contrib: true
    index: 1
  - name: Oklahoma State University, School of Civil and Environmental Engineering
    index: 2
@@ -38,5 +41,8 @@ A number of Mesonet variables are collected on a longer time interval than 5 min
 Another use case is performing geospatial analysis of environmental variables. When working with sets of stations `OKMesoPy` can do simple areal averaging using the arithmetic mean which can be adequate for a number of use cases [@Singh:1975]. When more complex methods are required being able to easily generate data grouped by bounding boxes or shapefiles and having access to station location data makes it easy to implement other methods such as Thiessen polygons or the reciprocal distance squared method.
 
 Mesonet data can also be used by municipalities to make decisions for town planning, water management, energy needs, extreme weather events, and maintaining civil infrastructure. Farmers can use climate data from Mesonet to grow different crops while efficiently managing water. For all these use cases, `OKMesoPy` can help ease the data acquisition process.
+
+# Acknowledgements
+This study is based upon the work supported by U.S. Department of the Interior, Geological Survey under Grant #2021OK006G. The authors would like to thank the taxpayers of the state of Oklahoma for providing continuous financial support to the Oklahoma mesonet network.
 
 # References
