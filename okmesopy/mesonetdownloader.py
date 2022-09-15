@@ -218,8 +218,20 @@ class MesonetDownloader:
                     print('This means that there is no data available for the'
                           ' {} on {}.'.format(site_id,i))
             if not cur_df.empty:
-                cur_df['DATE'] =  datetime.strptime(i, '%Y%m%d')
-                cur_df['DATETIME'] = cur_df.apply(lambda x: x['DATE']+timedelta(minutes = int(x['TIME'])), axis = 1)
+                date =  datetime.strptime(i, '%Y%m%d')
+                cur_df['DATETIME'] = cur_df.apply(lambda x: date+timedelta(minutes = int(x['TIME'])), axis = 1)
+                # change rain to differential instead of cumulative
+                first_rain = cur_df.loc[0,'RAIN']
+                second_rain = cur_df.loc[1,'RAIN']
+                # there are cases where the last reading from the previous day
+                # rolls over so we check for that and zero out the number
+                if first_rain > second_rain:
+                    first_rain = 0
+                    cur_df.loc[0,'RAIN'] = first_rain
+                cur_df['RAIN']=cur_df['RAIN'].diff()
+                cur_df.loc[0,'RAIN'] = first_rain
+                # drop some columns to save memory
+                cur_df.drop(columns=['STNM','TIME'],inplace=True)
                 df_list.append(cur_df)
             elif self.verbose:
                 print('No data available for {} on {}.'.format(site_id,i))
