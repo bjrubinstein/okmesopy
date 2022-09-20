@@ -6,7 +6,7 @@
 # Some code based on nhdplusextractor by Mitchell Sawtelle
 #   (https://github.com/Msawtelle/PyNHDPlus)
 #
-# last updated: 08/10/2022
+# last updated: 09/20/2022
 #
 # contains the MesonetDownloader class, which can be used to retrieve and
 # manipulate source data from the Mesonet dataset online
@@ -41,9 +41,7 @@ class MesonetDownloader:
         if destination is None:
             self.destination = os.path.dirname(__file__)
         else:
-            self.destination = destination
-        # replace slashes in Windows style paths
-        self.destination = self.destination.replace('\\','/')
+            self.destination = os.path.normpath(destination)
 
         try:
             if not os.path.isdir(self.destination): os.mkdir(self.destination)
