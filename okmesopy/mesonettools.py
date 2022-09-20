@@ -302,6 +302,102 @@ class MesonetTools:
             msno.matrix(rep_df.set_index('DATETIME'),freq='5M')
 
 
+    def save_timeseries(self,df,column,step=5):
+        '''
+        Saves the a data for a single variable for a single station as a
+            PyHSPF readable timeseries. If a set of stations is provided,
+            the arithmetic mean is used instead
+
+        arguments:
+            df (dict or DataFrame): the DataFrame to create a series from; if
+                a dictionary is passed in, the arithmetic mean of all contained
+                DataFrames is used
+            column (str): the variable to create a time series for
+            step (int): the time interval to use in minutes; must be at least
+                5 and divisible by 5; the closest multiple of 5 will be used
+                instead if not
+
+        returns:
+            tuple (datetime,int,series): the timeseries object in the form
+                (start time,step size,data)
+        '''
+        column = column.upper()
+        # validate the step size
+        if step < 5:
+            if self.verbose:
+                print('{} was given as step size but it must be at least 5'
+                      ' minutes. A step size of 5 minutes will be used'
+                      ' instead'.format(step))
+            step = 5
+        elif step%5 != 0:
+            if self.verbose:
+                print('Step size must be a multiple of 5. The given step size'
+                      ', {}, will be rounded up to {}.'.format(step,step + 5 - step%5))
+            step = step + 5 - step%5
+        # if a dictionary has been given, generate the average
+        tempdf = pd.DataFrame()
+        if self.__is_dict(df):
+            # concatenate all the DataFrames together, using only the relevant
+            #   column to save memory
+            for key in df:
+                start = df[key].loc[0,'DATETIME']
+                # make sure the column exists
+                if not column in df[key].columns:
+                    print('Error: the column {} was not found in the dataframe'
+                          ' for the {} station.'.format(column,key))
+                    return None
+                tempdf = pd.concat((tempdf,df[key].copy(column)))
+            # remove all error codes so they don't throw off the averages
+            tempdf = self.replace_errors(tempdf)
+            # make df the mean
+            df = tempdf.groupby(tempdf.index).mean()
+            print(df.columns)
+        else:
+            # get the start date and time
+            start = df.loc[0,'DATETIME']
+        data = []
+        # easiest case we just use every data point
+        if step == 5:
+            for dat in df[column]:
+                # if valid data append it, else append None
+                if not np.isnan(dat) and dat not in self.errorcodes:
+                    data.append(dat)
+                else:
+                    data.append(None)
+        else:
+            multiple = int(step/5)
+            count = 0
+            index = 1
+            temp_val = 0
+            for dat in df[column]:
+                if index < multiple:
+                    index += 1
+                    # keep a running store of the sum of values
+                    if not np.isnan(dat) and dat not in self.errorcodes:
+                        temp_val += dat
+                        # count is tracked separately from index so that error
+                        #   codes don't throw off the averages
+                        count += 1
+                else:
+                    # we've hit the interval we are looking for and now need to
+                    #   add our data to the time series
+                    if column == 'RAIN':
+                        # rainfall is a special case because it needs to be
+                        #   cumulative not averaged
+                        data.append(temp_val)
+                    elif count == 0:
+                        data.append(None)
+                    else:
+                        # take the average and append it
+                        data.append(temp_val/count)
+                    # reset all our temporary values
+                    count=0
+                    index=1
+                    temp_val=0
+        ts = start, step, data
+        return ts
+
+
     def __download_neighbor(self,df,downloader,station_id):
         '''
         Helper function that downloads and fills data from a neighboring station
