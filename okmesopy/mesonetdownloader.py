@@ -6,12 +6,11 @@
 # Some code based on nhdplusextractor by Mitchell Sawtelle
 #   (https://github.com/Msawtelle/PyNHDPlus)
 #
-# last updated: 09/20/2022
+# last updated: 09/25/2022
 #
 # contains the MesonetDownloader class, which can be used to retrieve and
 # manipulate source data from the Mesonet dataset online
-import urllib.request
-import os
+import urllib.request, os, pytz
 import pandas as pd
 import numpy as np
 from datetime import timedelta, datetime
@@ -219,7 +218,7 @@ class MesonetDownloader:
                           ' {} on {}.'.format(site_id,i))
             if not cur_df.empty:
                 date =  datetime.strptime(i, '%Y%m%d')
-                cur_df['DATETIME'] = cur_df.apply(lambda x: date+timedelta(minutes = int(x['TIME'])), axis = 1)
+                cur_df['DATETIME'] = cur_df.apply(lambda x: pytz.utc.localize(date+timedelta(minutes = int(x['TIME']))), axis = 1)
                 # change rain to differential instead of cumulative
                 # make a copy of the rain column so we can track the errors
                 cur_df['RAIN_BAK'] = cur_df['RAIN']
