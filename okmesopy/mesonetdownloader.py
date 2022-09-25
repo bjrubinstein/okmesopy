@@ -36,6 +36,8 @@ class MesonetDownloader:
             verbose (bool): if true write detailed debugging to stdout
         '''
         self.verbose = verbose
+        # this is used for handling changing the rain column to differential
+        self.errorcodes=[-994,-995,-996,-997,-998,-999]
         # if no destination given in init method set destination to current
         #   directory
         if destination is None:
@@ -219,6 +221,12 @@ class MesonetDownloader:
                 date =  datetime.strptime(i, '%Y%m%d')
                 cur_df['DATETIME'] = cur_df.apply(lambda x: date+timedelta(minutes = int(x['TIME'])), axis = 1)
                 # change rain to differential instead of cumulative
+                # make a copy of the rain column so we can track the errors
+                cur_df['RAIN_BAK'] = cur_df['RAIN']
+                                # replace the errors with nan
+                for code in self.errorcodes:
+                    cur_df['RAIN'].replace(str(code),np.nan,inplace=True)
+                    cur_df['RAIN'].replace(code,np.nan,inplace=True)
                 first_rain = cur_df.loc[0,'RAIN']
                 second_rain = cur_df.loc[1,'RAIN']
                 # there are cases where the last reading from the previous day
@@ -228,8 +236,14 @@ class MesonetDownloader:
                     cur_df.loc[0,'RAIN'] = first_rain
                 cur_df['RAIN']=cur_df['RAIN'].diff()
                 cur_df.loc[0,'RAIN'] = first_rain
+                # copy error codes back into the rain column
+                # TODO: fix the SettingWithCopyError warning
+                pd.options.mode.chained_assignment = None
+                for code in self.errorcodes:
+                    cur_df['RAIN'].loc[cur_df['RAIN_BAK']==code] = code
+                pd.options.mode.chained_assignment = 'warn'
                 # drop some columns to save memory
-                cur_df.drop(columns=['STNM','TIME'],inplace=True)
+                cur_df.drop(columns=['STNM','TIME','RAIN_BAK'],inplace=True)
                 df_list.append(cur_df)
             elif self.verbose:
                 print('No data available for {} on {}.'.format(site_id,i))

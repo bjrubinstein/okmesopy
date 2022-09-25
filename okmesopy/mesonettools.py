@@ -28,7 +28,7 @@ class MesonetTools:
         '''
         self.verbose=verbose
         # these are used internally when replacing data
-        self.nondatcols=['STID','STNM','TIME','DATE','DATETIME']
+        self.nondatcols=['STID','DATETIME']
         self.errorcodes=[-994,-995,-996,-997,-998,-999]
 
 
@@ -54,6 +54,7 @@ class MesonetTools:
         returns:
             DataFrame or dict: the modified df object
         '''
+        df = df.copy()
         # check if we've been given a dict or dataframe
         if self.__is_dict(df)==-1:
             if self.verbose:
@@ -101,7 +102,7 @@ class MesonetTools:
                     # check if the column exists
                     if column in df.columns:
                         # replace for a single column
-                        df[column] = df[column].replace(code,np.nan)
+                        df[column] = df[column].replace(str(code),np.nan)
                         df[column] = df[column].replace(code,np.nan)
                     elif self.verbose:
                         print('Warning: there is no column named {}'
@@ -116,7 +117,7 @@ class MesonetTools:
             values
         
         This method will automatically ignore the following columns:
-            'STID','STNM','TIME','DATE','DATETIME'
+            'STID', 'DATETIME'
 
         arguments:
             df (DataFrame or dict): the dataframe or dictionary of dataframes
@@ -174,7 +175,7 @@ class MesonetTools:
             station that has the missing observation
         
         This method will automatically ignore -995 error codes and the
-            following columns: 'STID','STNM','TIME','DATE','DATETIME'
+            following columns: 'STID', 'DATETIME'
 
         arguments:
             df (DataFrame or dict): the dataframe or dictionary of dataframes
@@ -215,16 +216,13 @@ class MesonetTools:
                 df[key] = self.fill_neighbor_data(df[key],downloader,codes,column)
         else:
             stid = df.loc[0,'STID']
-            print(stid)
-            df.set_index(['DATETIME'],inplace=True)
+            df = df.set_index(['DATETIME'])
             if not codes:
-                codes = self.errorcodes
+                codes = self.errorcodes.copy()
             # skip -995, no stations will have data on the not sampled intervals
             if -995 in codes: codes.remove(-995)
             for code in codes:
                 df = self.replace_errors(df,code,column)
-            # replace all error codes
-            df = self.replace_errors(df,column=column)
             # create a list of stations sorted by distance
             target_coord = downloader.get_station_coord(stid)
             coord_tuple = list(downloader.metadata.loc[:,['nlat','elon']].itertuples(index = False, name = None))
@@ -242,7 +240,7 @@ class MesonetTools:
                 if df.isnull().sum().sum()==0:
                     break
                 df = self.__download_neighbor(df,downloader,station)
-            df = df.reset_index()
+            df.reset_index(inplace=True)
         return df
 
 
@@ -352,7 +350,6 @@ class MesonetTools:
             tempdf = self.replace_errors(tempdf)
             # make df the mean
             df = tempdf.groupby(tempdf.index).mean()
-            print(df.columns)
         else:
             # get the start date and time
             start = df.loc[0,'DATETIME']
@@ -453,7 +450,7 @@ class MesonetTools:
                 print('Warning: The file {} already exists in the directory {}.'
                       ' Please choose a new filename or directory or set the force'
                       ' argument to true to overwrite the existing file.'.format(filename,path))
-                return            
+                return
             df.to_csv('{}/{}'.format(path,filename),index=False)
 
 
@@ -470,8 +467,10 @@ class MesonetTools:
         returns:
             DataFrame: the modified df object
         '''
-        # get a list of missing dates from the 
-        missing_dates = list(df[df.isna().any(axis=1)]['DATE'].unique())
+        # get a list of dates with missing data
+        missing_dates = []
+        for dt in df[df.isna().any(axis=1)].index.unique():
+            if dt.date() not in missing_dates: missing_dates.append(dt.date())
         # download data for each of the missing dates
         for miss_date in missing_dates:
             date = pd.to_datetime(miss_date).date()
