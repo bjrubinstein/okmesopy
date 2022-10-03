@@ -1,8 +1,10 @@
+[![DOI](https://zenodo.org/badge/516874210.svg)](https://zenodo.org/badge/latestdoi/516874210)
+
 # OKMesoPy
 
 NOTE: data from the Oklahoma Mesonet is copyrighted by the Oklahoma Climatological Survey and the Oklahoma Mesonet. It is the responsibility of the user of this package to ensure they follow the Mesonet Data Access Policy: https://www.mesonet.org/index.php/site/about/data_access_and_pricing
 
-OKMesoPy is a package to aid in downloading and manipulating the Oklahoma Mesonet climate dataset. This tool was written for creating time series for use in HSPF models but the dataset can have many uses.
+OKMesoPy is a package to aid in downloading and manipulating the Oklahoma Mesonet climate dataset. This tool was written for creating time series for use in HSPF models but it can be used by climate researchers for any data-intensive research using the Oklahoma Mesonet dataset.
 
 **Core Dependencies:**
 - NumPy
