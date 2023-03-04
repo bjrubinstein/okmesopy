@@ -3,7 +3,7 @@
 # Abhiram Pamula (apamula@okstate.edu)
 # Ben Rubinstein (brubinst@hawk.iit.edu)
 #
-# last updated: 09/20/2022
+# last updated: 03/03/2023
 #
 # contains the MesonetTools class
 import os, re
@@ -28,7 +28,10 @@ class MesonetTools:
         '''
         self.verbose=verbose
         # these are used internally when replacing data
-        self.nondatcols=['STID','DATETIME']
+        self.nondatcols=['STID']
+        self.calculatedcols=['TDEW','EVAP']
+        # columns that should be summed instead of averaged when resampling
+        self.sumcols=['RAIN','EVAP']
         self.errorcodes=[-994,-995,-996,-997,-998,-999]
 
 
@@ -96,7 +99,7 @@ class MesonetTools:
             else:
                 if column is None:
                     # replace for all columns
-                    df = df.replace(code,np.nan)
+                    df = df.replace(str(code),np.nan)
                     df = df.replace(code,np.nan)
                 else:
                     # check if the column exists
@@ -215,8 +218,7 @@ class MesonetTools:
             for key in df:
                 df[key] = self.fill_neighbor_data(df[key],downloader,codes,column)
         else:
-            stid = df.loc[0,'STID']
-            df = df.set_index(['DATETIME'])
+            stid = df.loc[df.index[0],'STID']
             if not codes:
                 codes = self.errorcodes.copy()
             # skip -995, no stations will have data on the not sampled intervals
@@ -235,12 +237,18 @@ class MesonetTools:
                 station_list.append([i,distance.distance(target_coord,j).miles])
             station_list = sorted(station_list, key = lambda x:(x[1], x[0]))
             stids = [i[0] for i in station_list]
+            # we need to deal with nans in calculated columns since no station
+            # will have those; first replace them with a placeholder value
+            for col in self.calculatedcols:
+                if col in df.columns: df[col] = df[col].replace(np.nan,-1000)
             for station in stids:
                 # break when all data has been filled
                 if df.isnull().sum().sum()==0:
                     break
                 df = self.__download_neighbor(df,downloader,station)
-            df.reset_index(inplace=True)
+            # add the nans back into the calculated columns
+            for col in self.calculatedcols:
+                if col in df.columns: df[col] = df[col].replace(-1000,np.nan)
         return df
 
 
@@ -265,21 +273,21 @@ class MesonetTools:
                 # populate the error dataframe
                 try:
                     count = counts[error]
-                    errors.loc[col,error]=int(count)
+                    errors.loc[col,error]=count
                 except:
                     # a key value error here means there were none of this
                     # error code in this column
-                    errors.loc[col,error]=int(0)
+                    errors.loc[col,error]=0
             # add a total value for each column
-            errors.loc[col,'TOTAL']=int(errors.loc[col,:].sum())
+            errors.loc[col,'TOTAL']=errors.loc[col,:].sum()
         # add a total for the error codes as well
         for col in errors.columns:
-            errors.loc['TOTAL',col]=int(errors.loc[:,col].sum())
-        # total values
-        total = errors.sum().sum()
-        total_corrected = total - errors.loc[:,-995].sum()
+            errors.loc['TOTAL',col]=errors.loc[:,col].sum()
+        # total values, the bottom right cell has the overall total
+        total = errors.iloc[-1,-1]
+        total_corrected = total - errors.loc[errors.index[-1],-995]
         # print a summary of the missing data
-        print('Missing data summary for {} station:'.format(df.loc[0,'STID']))
+        print('Missing data summary for {} station:'.format(df.loc[df.index[0],'STID']))
         print('-----------------------')
         print('To see a description of each error code run help(MesonetTools.replace_errors)')
         print('Note: the -995 error code is used when data is not collected'
@@ -288,17 +296,17 @@ class MesonetTools:
               ' data points excluding -995 codes'.format(total,total_corrected))
         print('The following chart displays the number of each kind of error'
               ' code found in each column of the DataFrame.\n')
-        print(errors)
+        print(errors.astype(int))
         # graphically display errors if the chart arguement is true
         if graph:
             # prepare a dataframe for the missingno library, we need to
             # actually replace all the error codes with NaN so missingno can
             # recognize them
             rep_df = self.replace_errors(df)
-            # also remove non data columns and set the index to DATETIME
+            # also remove non data columns
             for col in self.nondatcols:
-                if not col=='DATETIME': rep_df.drop(col,axis=1,inplace=True)
-            msno.matrix(rep_df.set_index('DATETIME'),freq='5M')
+                rep_df.drop(col,axis=1,inplace=True)
+            msno.matrix(rep_df,freq='5M')
 
 
     def save_timeseries(self,df,column,step=5):
@@ -339,7 +347,7 @@ class MesonetTools:
             # concatenate all the DataFrames together, using only the relevant
             #   column to save memory
             for key in df:
-                start = df[key].loc[0,'DATETIME']
+                start = df[key].index[0]
                 # make sure the column exists
                 if not column in df[key].columns:
                     print('Error: the column {} was not found in the dataframe'
@@ -349,10 +357,10 @@ class MesonetTools:
             # remove all error codes so they don't throw off the averages
             tempdf = self.replace_errors(tempdf)
             # make df the mean
-            df = tempdf.groupby(tempdf.index).mean()
+            df = tempdf.groupby(tempdf.index).mean(numeric_only=True)
         else:
             # get the start date and time
-            start = df.loc[0,'DATETIME']
+            start = df.index[0]
         data = []
         # easiest case we just use every data point
         if step == 5:
@@ -379,9 +387,8 @@ class MesonetTools:
                 else:
                     # we've hit the interval we are looking for and now need to
                     #   add our data to the time series
-                    if column == 'RAIN':
-                        # rainfall is a special case because it needs to be
-                        #   cumulative not averaged
+                    if column in self.sumcols:
+                        # special cases that need to be summed not averaged
                         data.append(temp_val)
                     elif count == 0:
                         data.append(None)
@@ -429,8 +436,8 @@ class MesonetTools:
                 concat_df = pd.concat((concat_df,df[key]))
                 # generate the file name
                 if not filename:
-                    start = df[key].loc[0,'DATETIME'].strftime('%m%d%y')
-                    end = df[key].iloc[-1]['DATETIME'].strftime('%m%d%y')
+                    start = df[key].index[0].strftime('%m%d%y')
+                    end = df[key].index[-1].strftime('%m%d%y')
                     filename = '{}_and-{}-more_{}-{}.csv'.format(key,len(df)-1,start,end)
             # if file exists check if the force argument is true
             if os.path.exists('{}/{}'.format(path,filename)) and not force:
@@ -438,12 +445,12 @@ class MesonetTools:
                       ' Please choose a new filename or directory or set the force'
                       ' argument to true to overwrite the existing file.'.format(filename,path))
                 return
-            concat_df.to_csv('{}/{}'.format(path,filename),index=False)
+            concat_df.to_csv('{}/{}'.format(path,filename))
         else:
             if not filename:
-                stid = df.loc[0,'STID']
-                start = df.loc[0,'DATETIME'].strftime('%m%d%y')
-                end = df.iloc[-1]['DATETIME'].strftime('%m%d%y')
+                stid = df.loc[df.index[0],'STID']
+                start = df.index[0].strftime('%m%d%y')
+                end = df.index[-1].strftime('%m%d%y')
                 filename = '{}_{}-{}.csv'.format(stid,start,end)
             # if file exists check if the force argument is true
             if os.path.exists('{}/{}'.format(path,filename)) and not force:
@@ -451,7 +458,40 @@ class MesonetTools:
                       ' Please choose a new filename or directory or set the force'
                       ' argument to true to overwrite the existing file.'.format(filename,path))
                 return
-            df.to_csv('{}/{}'.format(path,filename),index=False)
+            df.to_csv('{}/{}'.format(path,filename))
+
+
+    def calculate_dewpoint(self, df, a=17.625, b=243.04):
+        '''
+        Calculates the dewpoint temperatures from temperature and relative
+        humidity using the Magnus-Tetens formula
+        DOI:10.1175/BAMS-86-2-225
+        
+        arguments:
+            df (DataFrame or dict): the dataframe or dictionary of dataframes
+                to calculate dewpoints for
+            a, b (float): the Magnus coefficients, by default the ones given by
+                Alduchov and Eskridge are used:
+                DOI:10.1175/1520-0450(1996)035<0601:IMFAOS>2.0.CO;2
+        '''
+        # make sure we have been given a dataframe or dictionary
+        if self.__is_dict(df)==-1:
+            if self.verbose:
+                print('Warning: calculate_dewpoint() expects a DataFrame or'
+                      ' dict not a {}. No actions performed.'.format(type(df)))
+        # if df is a dictionary, recursively call this function for each of its keys
+        elif self.__is_dict(df)==1:
+            for key in df:
+                df[key] = self.calculate_dewpoint(df[key],a,b)
+        # if df is a dataframe we can find the dewpoint
+        elif self.__is_dict(df)==0:
+            # replace errors in RELH and TAIR to ensure we get nans where data
+            # is missing
+            rep_df = self.replace_errors(df,column='TAIR')
+            rep_df = self.replace_errors(rep_df,column='RELH')
+            alpha = np.log(rep_df["RELH"]/100) + (a*rep_df["TAIR"]/(b+rep_df["TAIR"]))
+            df["TDEW"] = (b * alpha) / (a - alpha)
+        return df
 
 
     def __download_neighbor(self,df,downloader,station_id):
@@ -479,7 +519,6 @@ class MesonetTools:
                 # we don't want to copy over any error codes so replace all of them
                 neighbor_df = self.replace_errors(neighbor_df)
                 # fill in data
-                neighbor_df.set_index(['DATETIME'],inplace=True)
                 df = df.fillna(neighbor_df)
         return df
 

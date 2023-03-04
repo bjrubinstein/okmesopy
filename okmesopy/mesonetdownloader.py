@@ -6,7 +6,7 @@
 # Some code based on nhdplusextractor by Mitchell Sawtelle
 #   (https://github.com/Msawtelle/PyNHDPlus)
 #
-# last updated: 09/25/2022
+# last updated: 03/03/2023
 #
 # contains the MesonetDownloader class, which can be used to retrieve and
 # manipulate source data from the Mesonet dataset online
@@ -222,7 +222,7 @@ class MesonetDownloader:
                 # change rain to differential instead of cumulative
                 # make a copy of the rain column so we can track the errors
                 cur_df['RAIN_BAK'] = cur_df['RAIN']
-                                # replace the errors with nan
+                # replace the errors with nan
                 for code in self.errorcodes:
                     cur_df['RAIN'].replace(str(code),np.nan,inplace=True)
                     cur_df['RAIN'].replace(code,np.nan,inplace=True)
@@ -249,7 +249,7 @@ class MesonetDownloader:
         if len(df_list) == 0:
             return None
         final_df = pd.concat(df_list)
-        final_df = final_df.reset_index(drop=True)
+        final_df = final_df.set_index('DATETIME')
         return final_df
 
 
