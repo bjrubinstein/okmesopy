@@ -10,7 +10,8 @@ import os, re
 import pandas as pd
 import numpy as np
 import missingno as msno
-from okmesopy import MesonetDownloader
+from .mesonetdownloader import MesonetDownloader
+from .etcalculator import ETCalculator
 from geopy import distance
 
 class MesonetTools:
@@ -80,32 +81,27 @@ class MesonetTools:
         elif self.__is_dict(df)==0:
             if code==1:
                 # replace all error codes with NaN
-                for i in self.errorcodes:
-                    if column is None:
-                        # replace for all columns
-                        df = df.replace(str(i),np.nan)
-                        df = df.replace(i,np.nan)
-                    else:
-                        # check if the column exists
-                        if column in df.columns:
-                            # replace for a single column
-                            df[column] = df[column].replace(str(i),np.nan)
-                            df[column] = df[column].replace(i,np.nan)
-                        elif self.verbose:
-                            print('Warning: there is no column named {}'
-                                  ' in the dataframe. No actions will be'
-                                  ' taken.'.format(column))
+                if column is None:
+                    # replace for all columns
+                    df = df.replace(self.errorcodes,np.nan)
+                else:
+                    # check if the column exists
+                    if column in df.columns:
+                        # replace for a single column
+                        df[column] = df[column].replace(self.errorcodes,np.nan)
+                    elif self.verbose:
+                        print('Warning: there is no column named {}'
+                              ' in the dataframe. No actions will be'
+                              ' taken.'.format(column))
             # check if code is a valid error code
             else:
                 if column is None:
                     # replace for all columns
-                    df = df.replace(str(code),np.nan)
                     df = df.replace(code,np.nan)
                 else:
                     # check if the column exists
                     if column in df.columns:
                         # replace for a single column
-                        df[column] = df[column].replace(str(code),np.nan)
                         df[column] = df[column].replace(code,np.nan)
                     elif self.verbose:
                         print('Warning: there is no column named {}'
@@ -293,7 +289,7 @@ class MesonetTools:
         print('Note: the -995 error code is used when data is not collected'
               ' on an interval. This code is generally normal and expected.')
         print('There are {} total missing data points and {} missing data'
-              ' data points excluding -995 codes'.format(total,total_corrected))
+              ' data points excluding -995 codes'.format(int(total),int(total_corrected)))
         print('The following chart displays the number of each kind of error'
               ' code found in each column of the DataFrame.\n')
         print(errors.astype(int))
@@ -309,7 +305,7 @@ class MesonetTools:
             msno.matrix(rep_df,freq='5M')
 
 
-    def save_timeseries(self,df,column,step=5):
+    def save_timeseries(self,df,column,step=5,get_min=False,get_max=False):
         '''
         Saves the a data for a single variable for a single station as a
             PyHSPF readable timeseries. If a set of stations is provided,
@@ -320,17 +316,24 @@ class MesonetTools:
                 a dictionary is passed in, the arithmetic mean of all contained
                 DataFrames is used
             column (str): the variable to create a time series for
-            step (int): the time interval to use in minutes; must be at least
-                5 and divisible by 5; the closest multiple of 5 will be used
-                instead if not
+            step (int or str): the time interval to use in minutes; must be at
+                least 5 and divisible by 5; the closest multiple of 5 will be
+                least instead if not; the strings 'hourly' and 'daily' are also
+                valid
+            get_min (bool): If true, returns the minimum value instead of mean
+                or sum when resampling
+            get_max (bool): If true, returns the maximum value instead of mean
+                or sum when resampling
 
         returns:
-            tuple (datetime,int,series): the timeseries object in the form
-                (start time,step size,data)
+            tuple (int,datetime,list): the timeseries object in the form
+                (step size,start date,data)
         '''
         column = column.upper()
         # validate the step size
-        if step < 5:
+        if step == 'hourly': step = 60
+        elif step == 'daily': step = 1440
+        elif step < 5:
             if self.verbose:
                 print('{} was given as step size but it must be at least 5'
                       ' minutes. A step size of 5 minutes will be used'
@@ -361,45 +364,24 @@ class MesonetTools:
         else:
             # get the start date and time
             start = df.index[0]
-        data = []
         # easiest case we just use every data point
         if step == 5:
-            for dat in df[column]:
-                # if valid data append it, else append None
-                if not np.isnan(dat) and dat not in self.errorcodes:
-                    data.append(dat)
-                else:
-                    data.append(None)
+            data = df[column].replace(self.errorcodes,np.nan).tolist()
         else:
-            multiple = int(step/5)
-            count = 0
-            index = 1
-            temp_val = 0
-            for dat in df[column]:
-                if index < multiple:
-                    index += 1
-                    # keep a running store of the sum of values
-                    if not np.isnan(dat) and dat not in self.errorcodes:
-                        temp_val += dat
-                        # count is tracked separately from index so that error
-                        #   codes don't throw off the averages
-                        count += 1
-                else:
-                    # we've hit the interval we are looking for and now need to
-                    #   add our data to the time series
-                    if column in self.sumcols:
-                        # special cases that need to be summed not averaged
-                        data.append(temp_val)
-                    elif count == 0:
-                        data.append(None)
-                    else:
-                        # take the average and append it
-                        data.append(temp_val/count)
-                    # reset all our temporary values
-                    count=0
-                    index=1
-                    temp_val=0
-        ts = start, step, data
+            # check what kind of resampling we need to do
+            if get_min and not get_max:
+                data = df[column].replace(self.errorcodes,np.nan).resample(str(step)+'Min').min().tolist()
+            elif get_max and not get_min:
+                data = df[column].replace(self.errorcodes,np.nan).resample(str(step)+'Min').max().tolist()
+            elif get_min and get_max:
+                print('Error: both get_min and get_max were set to True. Only'
+                      ' one can be true.')
+                return 
+            elif column in self.sumcols:
+                data = df[column].replace(self.errorcodes,np.nan).resample(str(step)+'Min').sum().tolist()
+            else:
+                data = df[column].replace(self.errorcodes,np.nan).resample(str(step)+'Min').mean().tolist()
+        ts = step, start, data
         return ts
 
 
@@ -494,6 +476,97 @@ class MesonetTools:
         return df
 
 
+    def calculate_ret(self,df,start,end,downloader,timestep=60,wind='WS2M',
+                      error_handling='nan'):
+        '''
+        Calculates the reference evapotranspiration using the Penman-Monteith
+            equation. This method sets everything up using a MesonetDownloader
+            dataframe and the actual calculations are done in the ETCalculator
+            class.
+        
+        arguments:
+            df (DataFrame): the dataframe to calculate reference ET for
+            start (datetime.datetime): first date to get data
+            end (datetime.datetime): last date (inclusive) to get data
+            downloader (MesonetDownloader): a MesonetDownloader object is
+                required to get the station location data
+            timestep (int): time step to use in minutes; acceptable values are
+                60, 1440, or a factor of 60 that is also a multiple of 5
+            wind (str): which column to use for wind speed data; acceptable
+                values are 'WS2M','WSPD', and 'WMAX' which are wind speed at 2
+                meters, 10 meters, and max wind speed at 10 meters respectively
+                it is recommended to use the default 'WS2M' so that no
+                correction needs to be done
+            error_handling (str): tells the function how to deal with error
+                codes in the data; acceptable values are 'nan', 'interpolate',
+                and 'neighbor'. 'nan' is the default and simply replaces error
+                codes with nan. This will result in nans in the ET time series.
+                'interpolate' and 'neighbor' use the interpolate_missing and
+                fill_neighbor_data methods respectively to fill in missing data
+
+        returns:
+            tuple (int,datetime,list): step size in minutes, start time
+                of the series, reference evapotranspiration in mm
+        '''
+        # validate the timestep
+        if timestep == 'daily' or timestep == 1440: timestep = 1440
+        elif timestep == 'hourly' or timestep == 60: timestep = 60
+        elif timestep < 5:
+            if self.verbose:
+                print('{} was given as step size but it must be at least 5'
+                      ' minutes. A step size of 5 minutes will be used'
+                      ' instead'.format(timestep))
+            timestep = 5
+        elif timestep%5 != 0 and 60%timestep != 0:
+            if self.verbose:
+                msg = ('Error: step size was given as {}. Valid time steps are'
+                       ' hourly, daily, or a factor of 60 that is also a'
+                       ' multiple of 5.')
+                raise ValueError(msg)
+        # prepare the dataframe
+        if error_handling == 'nan':
+            df = self.replace_errors(df)
+        elif error_handling == 'interpolate':
+            df = self.interpolate_missing(df,column='TAIR')
+            df = self.interpolate_missing(df,column='RELH')
+            df = self.interpolate_missing(df,column=wind)
+            df = self.interpolate_missing(df,column='SRAD')
+        elif error_handling == 'neighbor':
+            df = self.fill_neighbor_data(df, downloader,column='TAIR')
+            df = self.fill_neighbor_data(df, downloader,column='RELH')
+            df = self.fill_neighbor_data(df, downloader,column=wind)
+            df = self.fill_neighbor_data(df, downloader,column='SRAD')
+        else:
+            print('Invalid error code handling method was given. Acceptable'
+                  ' values for the error_handling parameter are \'nan\','
+                  ' \'interpolate\', and \'neighbor\'.')
+            return None
+        df = self.calculate_dewpoint(df)
+        # initialize the ETCalculator object
+        calc = ETCalculator(timestep=timestep)
+        # add location data to the calculator
+        stid = df.iloc[0,0]
+        calc.add_location(*downloader.get_location(stid))
+        # add the required time series to the calculator
+        if timestep == 1440:
+            # daily calculations use min/max temperatures insetad of average
+            calc.add_timeseries('tmin',*self.save_timeseries(df,'TAIR',timestep,get_min=True))
+            calc.add_timeseries('tmax',*self.save_timeseries(df,'TAIR',timestep,get_max=True))
+            calc.add_timeseries('temperature',*self.save_timeseries(df,'TAIR',timestep))
+            calc.add_timeseries('dewpoint',*self.save_timeseries(df,'TDEW',timestep))
+            calc.add_timeseries('wind',*self.save_timeseries(df,wind,timestep))
+            calc.add_timeseries('solar',*self.save_timeseries(df,'SRAD',timestep))
+        else:
+            # hourly and fractional hourly calculations are done the same way
+            calc.add_timeseries('temperature',*self.save_timeseries(df,'TAIR',timestep))
+            calc.add_timeseries('dewpoint',*self.save_timeseries(df,'TDEW',timestep))
+            calc.add_timeseries('wind',*self.save_timeseries(df,wind,timestep))
+            calc.add_timeseries('solar',*self.save_timeseries(df,'SRAD',timestep))
+        # calculate RET and return the time series
+        calc.calculate_ret(start,end)
+        return (timestep, *calc.data['RET'])
+
+
     def __download_neighbor(self,df,downloader,station_id):
         '''
         Helper function that downloads and fills data from a neighboring station
@@ -513,7 +586,7 @@ class MesonetTools:
             if dt.date() not in missing_dates: missing_dates.append(dt.date())
         # download data for each of the missing dates
         for miss_date in missing_dates:
-            date = pd.to_datetime(miss_date).date()
+            date = pd.to_datetime(miss_date)
             neighbor_df = downloader.download_station_data(station_id,date,date)
             if neighbor_df is not None:
                 # we don't want to copy over any error codes so replace all of them
