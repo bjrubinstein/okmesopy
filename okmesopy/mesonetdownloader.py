@@ -6,7 +6,7 @@
 # Some code based on nhdplusextractor by Mitchell Sawtelle
 #   (https://github.com/Msawtelle/PyNHDPlus)
 #
-# last updated: 09/25/2022
+# last updated: 03/03/2023
 #
 # contains the MesonetDownloader class, which can be used to retrieve and
 # manipulate source data from the Mesonet dataset online
@@ -146,6 +146,21 @@ class MesonetDownloader:
         return (lat,lon)
 
 
+    def get_location(self,site_id):
+        '''
+        Returns the coordinates and elevation for a given station ID
+
+        arguments:
+            site_id (str): case-insensitive site ID as listed in the metadata
+                file
+
+        returns:
+            tuple: latitude, longitude, elevation in meters for the station
+        '''
+        elev = self.metadata.loc[self.metadata['stid'] == site_id.upper(),'elev'].item()
+        return (*self.get_station_coord(site_id), elev)
+
+
     def download_station_data(self,site_id,start_date,end_date):
         '''
         Method to download data for a single station over a specified time period
@@ -153,8 +168,8 @@ class MesonetDownloader:
         arguments:
             site_id (str): the ID for the station, IDs are in the metadata file
                 case-insensitive
-            start_date (datetime.date): first date to get data
-            end_date (datetime.date): last date (inclusive) to get data
+            start_date (datetime.datetime): first date to get data
+            end_date (datetime.datetime): last date (inclusive) to get data
 
         returns:
             DataFrame: a pandas DataFrame containing the downloaded data sorted
@@ -172,13 +187,13 @@ class MesonetDownloader:
         # check if station was active during the requested time period
         datc = self.metadata.loc[self.metadata['stid'] == site_id.upper(),'datc'].item()
         datd = self.metadata.loc[self.metadata['stid'] == site_id.upper(),'datd'].item()
-        if start_date < datc.date():
+        if start_date < datc:
             if self.verbose:
                 print('Warning: the {} station was commissioned on {} which'
                       ' was after the requested start date of {}. It will be'
                       ' skipped.'.format(site_id.upper(),datc,start_date))
             return None
-        if end_date > datd.date():
+        if end_date > datd:
             if self.verbose:
                 print('Warning: the {} station was decommissioned on {} which'
                       ' was before the requested end date of {}. It will be'
@@ -218,11 +233,11 @@ class MesonetDownloader:
                           ' {} on {}.'.format(site_id,i))
             if not cur_df.empty:
                 date =  datetime.strptime(i, '%Y%m%d')
-                cur_df['DATETIME'] = cur_df.apply(lambda x: pytz.utc.localize(date+timedelta(minutes = int(x['TIME']))), axis = 1)
+                cur_df['DATETIME'] = cur_df.apply(lambda x: date+timedelta(minutes = int(x['TIME'])), axis = 1)
                 # change rain to differential instead of cumulative
                 # make a copy of the rain column so we can track the errors
                 cur_df['RAIN_BAK'] = cur_df['RAIN']
-                                # replace the errors with nan
+                # replace the errors with nan
                 for code in self.errorcodes:
                     cur_df['RAIN'].replace(str(code),np.nan,inplace=True)
                     cur_df['RAIN'].replace(code,np.nan,inplace=True)
@@ -249,7 +264,7 @@ class MesonetDownloader:
         if len(df_list) == 0:
             return None
         final_df = pd.concat(df_list)
-        final_df = final_df.reset_index(drop=True)
+        final_df = final_df.set_index('DATETIME')
         return final_df
 
 
@@ -260,8 +275,8 @@ class MesonetDownloader:
         arguments:
             bbox (list): the bounding box to be searched; it expects the same format
                 as used in pyshp, [low longitude, low latitude, highlon, highlat]
-            start_date (datetime.date): first date to get data
-            end_date (datetime.date): last date (inclusive) to get data
+            start_date (datetime.datetime): first date to get data
+            end_date (datetime.datetime): last date (inclusive) to get data
             padding (int): an optional parameter that increases or decreases
                 the size of the bounding box, must be positive
 
@@ -314,8 +329,8 @@ class MesonetDownloader:
         arguments:
             shape (shapefile.Shape or shapefile.Reader): the shape object to be
                 searched for stations
-            start_date (datetime.date): first date to get data
-            end_date (datetime.date): last date (inclusive) to get data
+            start_date (datetime.datetime): first date to get data
+            end_date (datetime.datetime): last date (inclusive) to get data
             padding (int): an optional parameter that increases or decreases
                 the size of the bounding box, must be positive
             prj_path (str): an optional parameter that points to the .prj file
@@ -352,8 +367,8 @@ class MesonetDownloader:
 
         arguments:
             shape_file (str): the path to the shape file to be used
-            start_date (datetime.date): first date to get data
-            end_date (datetime.date): last date (inclusive) to get data
+            start_date (datetime.datetime): first date to get data
+            end_date (datetime.datetime): last date (inclusive) to get data
             padding (int): an optional parameter that increases or decreases
                 the size of the bounding box, must be positive
             prj_path (str): an optional parameter that points to the .prj file
