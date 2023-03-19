@@ -3,7 +3,7 @@
 # Abhiram Pamula (apamula@okstate.edu)
 # Ben Rubinstein (brubinst@hawk.iit.edu)
 #
-# last updated: 03/03/2023
+# last updated: 03/20/2023
 #
 # contains the MesonetTools class
 import os, re
@@ -305,7 +305,8 @@ class MesonetTools:
             msno.matrix(rep_df,freq='5M')
 
 
-    def save_timeseries(self,df,column,step=5,get_min=False,get_max=False):
+    def save_timeseries(self,df,column,step=5,get_min=False,get_max=False,
+                        timezone=None):
         '''
         Saves the a data for a single variable for a single station as a
             PyHSPF readable timeseries. If a set of stations is provided,
@@ -324,6 +325,7 @@ class MesonetTools:
                 or sum when resampling
             get_max (bool): If true, returns the maximum value instead of mean
                 or sum when resampling
+            timezone (str): 
 
         returns:
             tuple (int,datetime,list): the timeseries object in the form
@@ -477,7 +479,7 @@ class MesonetTools:
 
 
     def calculate_ret(self,df,start,end,downloader,timestep=60,wind='WS2M',
-                      error_handling='nan'):
+                      error_handling='nan',timezone='US/Central'):
         '''
         Calculates the reference evapotranspiration using the Penman-Monteith
             equation. This method sets everything up using a MesonetDownloader
@@ -542,6 +544,8 @@ class MesonetTools:
                   ' \'interpolate\', and \'neighbor\'.')
             return None
         df = self.calculate_dewpoint(df)
+        # convert the index to local time
+        df = df.tz_localize('UTC').tz_convert(timezone)
         # initialize the ETCalculator object
         calc = ETCalculator(timestep=timestep)
         # add location data to the calculator
@@ -552,7 +556,6 @@ class MesonetTools:
             # daily calculations use min/max temperatures insetad of average
             calc.add_timeseries('tmin',*self.save_timeseries(df,'TAIR',timestep,get_min=True))
             calc.add_timeseries('tmax',*self.save_timeseries(df,'TAIR',timestep,get_max=True))
-            calc.add_timeseries('temperature',*self.save_timeseries(df,'TAIR',timestep))
             calc.add_timeseries('dewpoint',*self.save_timeseries(df,'TDEW',timestep))
             calc.add_timeseries('wind',*self.save_timeseries(df,wind,timestep))
             calc.add_timeseries('solar',*self.save_timeseries(df,'SRAD',timestep))
