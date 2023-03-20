@@ -305,8 +305,7 @@ class MesonetTools:
             msno.matrix(rep_df,freq='5M')
 
 
-    def save_timeseries(self,df,column,step=5,get_min=False,get_max=False,
-                        timezone=None):
+    def save_timeseries(self,df,column,step=5,get_min=False,get_max=False):
         '''
         Saves the a data for a single variable for a single station as a
             PyHSPF readable timeseries. If a set of stations is provided,
@@ -325,7 +324,6 @@ class MesonetTools:
                 or sum when resampling
             get_max (bool): If true, returns the maximum value instead of mean
                 or sum when resampling
-            timezone (str): 
 
         returns:
             tuple (int,datetime,list): the timeseries object in the form
@@ -479,7 +477,7 @@ class MesonetTools:
 
 
     def calculate_ret(self,df,start,end,downloader,timestep=60,wind='WS2M',
-                      error_handling='nan',timezone='US/Central'):
+                      error_handling='nan'):
         '''
         Calculates the reference evapotranspiration using the Penman-Monteith
             equation. This method sets everything up using a MesonetDownloader
@@ -544,8 +542,6 @@ class MesonetTools:
                   ' \'interpolate\', and \'neighbor\'.')
             return None
         df = self.calculate_dewpoint(df)
-        # convert the index to local time
-        df = df.tz_localize('UTC').tz_convert(timezone)
         # initialize the ETCalculator object
         calc = ETCalculator(timestep=timestep)
         # add location data to the calculator
