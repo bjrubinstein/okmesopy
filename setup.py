@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(name='okmesopy',
-      version='1.1.0',
+      version='1.1.1',
       description='Tools to download and manipulate data from OK Mesonet',
       url='https://github.com/bjrubinstein/okmesopy',
       author='Ben Rubinstein',
