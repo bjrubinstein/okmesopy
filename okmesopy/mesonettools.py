@@ -3,7 +3,7 @@
 # Abhiram Pamula (apamula@okstate.edu)
 # Ben Rubinstein (brubinst@hawk.iit.edu)
 #
-# last updated: 03/03/2023
+# last updated: 03/20/2023
 #
 # contains the MesonetTools class
 import os, re
@@ -552,7 +552,6 @@ class MesonetTools:
             # daily calculations use min/max temperatures insetad of average
             calc.add_timeseries('tmin',*self.save_timeseries(df,'TAIR',timestep,get_min=True))
             calc.add_timeseries('tmax',*self.save_timeseries(df,'TAIR',timestep,get_max=True))
-            calc.add_timeseries('temperature',*self.save_timeseries(df,'TAIR',timestep))
             calc.add_timeseries('dewpoint',*self.save_timeseries(df,'TDEW',timestep))
             calc.add_timeseries('wind',*self.save_timeseries(df,wind,timestep))
             calc.add_timeseries('solar',*self.save_timeseries(df,'SRAD',timestep))

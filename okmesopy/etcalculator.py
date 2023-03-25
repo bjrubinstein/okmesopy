@@ -5,7 +5,7 @@
 #
 # adapted from PyHSPF by David Lampert (https://github.com/djlampert/PyHSPF)
 #
-# last updated: 03/03/2023
+# last updated: 03/20/2023
 #
 # contains methods to calculate reference evapotranspiration
 
@@ -54,8 +54,7 @@ class ETCalculator:
         if timestep == 1440:
             self.data = {
                 'tmin':        None,
-                'tmax':        None,                
-                'temperature': None,
+                'tmax':        None,
                 'dewpoint':    None,
                 'wind':        None,
                 'solar':       None,
@@ -240,17 +239,24 @@ class ETCalculator:
         return r
 
 
-    def sun(self, 
-            time,
-            zenith = 90.83, 
-            nearest_hour = False,
-            ):
-        """
+    def sun(self, time, zenith = 90.83, nearest_hour = False):
+        '''
         Estimates the sunrise and sunset time for a given latitude, longitude,
-        and date and optionally rounds it to the nearest hour. Algorithm
-        is derived from "Almanac for Computers," 1990, Nautical Almanac Office,
-        United States Naval Observatory, Washington DC 20392.
-        """
+            and date and optionally rounds it to the nearest hour. Algorithm
+            is derived from "Almanac for Computers," 1990, Nautical Almanac,
+            Office United States Naval Observatory, Washington DC 20392.
+
+        arguments:
+            time (datetime): the date to check sunrise and sunset for
+            zenith (float): sun's zenith distance at a certain time, 90°50' for
+                sunrise/sunset (see p. B6 of the reference)
+            nearest_hour (bool): whether or not to round the times to the
+                nearest hour
+
+        returns:
+            tuple (datetime): a pair of datetime.datetime objects in the form
+                (sunrise, sunset)
+        '''
 
         # calculate day of the year
 
@@ -318,12 +324,23 @@ class ETCalculator:
 
         UT = T - hour
 
+        # adjust to local time zone (this is not super accurate, but for the 
+        # purposes of ET estimation really doesn't warrant detailed estimation)
+
+        offset = round(self.longitude / 15)
+
+        # daily saving time
+
+        if time.month < 3 or 10 < time.month: offset -= 1
+
+        localT = UT + offset
+
         # adjust to [0, 24] as needed
 
-        if UT < 0:  UT += 24
-        if UT > 24: UT -= 24
+        if localT < 0:  localT += 24
+        if localT > 24: localT -= 24
             
-        t = datetime.timedelta(hours = UT)
+        t = datetime.timedelta(hours = localT)
 
         sunrise = ':'.join(str(t).split(':')[:2])
 
@@ -384,8 +401,17 @@ class ETCalculator:
         # adjust back to UTC
 
         UT = T - hour
+
+        # adjust to local time zone
+
+        localT = UT + offset
+
+        # adjust to [0, 24] as needed
+
+        if localT < 0:  localT += 24
+        if localT > 24: localT -= 24
             
-        t = datetime.timedelta(hours = UT)
+        t = datetime.timedelta(hours = localT)
 
         sunset = ':'.join(str(t).split(':')[:2])
 
@@ -677,9 +703,11 @@ class ETCalculator:
         # check and replace dewpoints higher than tmin/temperature
         #   (physically impossible)
         # convert solar from watt/m2 to MJ/m2/(hour or day)
+        # calculate average temp for daily time step
         if self.timestep == 1440:
             dewpoint = np.minimum(data['tmin'], data['dewpoint'])
             solar = data['solar'] * 86400 / 10**6
+            data['temperature'] = (data['tmin']+data['tmax'])/2
         else:
             dewpoint = np.minimum(data['temperature'], data['dewpoint'])
             solar = data['solar'] * 3600 / 10**6
@@ -739,7 +767,7 @@ class ETCalculator:
 
         # estimate the reference evapotranspiration
         if self.timestep == 1140:
-            'test'
+            RET = (0.408*d*(rnet-soil)+g*Cn/T*u2*(Ps-Pv))/(d+g*(1+Cd*u2))
         else:
             RET = ((0.408 * (rnet - soil) * d  + Cn * u2 / T * (Ps - Pv) * g) / 
                   (d + (g * (1 + C_d * u2)))) * (60 / self.timestep) 
