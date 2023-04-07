@@ -239,8 +239,10 @@ class MesonetTools:
                 if col in df.columns: df[col] = df[col].replace(np.nan,-1000)
             for station in stids:
                 # break when all data has been filled
-                if df.isnull().sum().sum()==0:
-                    break
+                if column is None:
+                    if df.isnull().sum().sum()==0: break
+                else:
+                    if df[column].isnull().sum()==0: break
                 df = self.__download_neighbor(df,downloader,station)
             # add the nans back into the calculated columns
             for col in self.calculatedcols:
@@ -477,7 +479,7 @@ class MesonetTools:
 
 
     def calculate_ret(self,df,start,end,downloader,timestep=60,wind='WS2M',
-                      error_handling='nan'):
+                      error_handling='nan',return_calc=False):
         '''
         Calculates the reference evapotranspiration using the Penman-Monteith
             equation. This method sets everything up using a MesonetDownloader
@@ -503,10 +505,14 @@ class MesonetTools:
                 codes with nan. This will result in nans in the ET time series.
                 'interpolate' and 'neighbor' use the interpolate_missing and
                 fill_neighbor_data methods respectively to fill in missing data
+            return_calc (bool): if true returns the calculator object instead
+                of just the RET time series
 
         returns:
             tuple (int,datetime,list): step size in minutes, start time
                 of the series, reference evapotranspiration in mm
+            or
+            ETCalculator: returned instead if the return_calc argument is true
         '''
         # validate the timestep
         if timestep == 'daily' or timestep == 1440: timestep = 1440
@@ -563,7 +569,10 @@ class MesonetTools:
             calc.add_timeseries('solar',*self.save_timeseries(df,'SRAD',timestep))
         # calculate RET and return the time series
         calc.calculate_ret(start,end)
-        return (timestep, *calc.data['RET'])
+        if return_calc:
+            return calc
+        else:
+            return (timestep, *calc.data['RET'])
 
 
     def __download_neighbor(self,df,downloader,station_id):
@@ -581,8 +590,8 @@ class MesonetTools:
         '''
         # get a list of dates with missing data
         missing_dates = []
-        for dt in df[df.isna().any(axis=1)].index.unique():
-            if dt.date() not in missing_dates: missing_dates.append(dt.date())
+        for dt in pd.Series([d.date() for d in df.index]).unique():
+            if dt not in missing_dates: missing_dates.append(dt)
         # download data for each of the missing dates
         for miss_date in missing_dates:
             date = pd.to_datetime(miss_date)

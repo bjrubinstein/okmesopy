@@ -264,6 +264,9 @@ class MesonetDownloader:
         if len(df_list) == 0:
             return None
         final_df = pd.concat(df_list)
+        # if a variable is added or removed it will result in NaNs
+        # we replace these with -995 error codes
+        final_df = final_df.replace(np.nan,-995)
         final_df = final_df.set_index('DATETIME')
         return final_df
 
