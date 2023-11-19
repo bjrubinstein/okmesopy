@@ -593,9 +593,6 @@ class MesonetTools:
         for dt in pd.Series([d.date() for d in df[df.isna().any(axis=1)].index]).unique():
             if dt not in missing_dates: missing_dates.append(dt)
         # download data for each of the missing dates
-        print(df.isna().sum())
-        print(station_id)
-        print(missing_dates)
         for miss_date in missing_dates:
             date = pd.to_datetime(miss_date)
             neighbor_df = downloader.download_station_data(station_id,date,date)
